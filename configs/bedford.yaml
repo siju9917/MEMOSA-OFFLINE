@@ -174,7 +174,7 @@ value_streams:
   ancillary: false
 
 dr_programs_evaluated:
-  - name: PJM Emergency Load Response (Capacity)
+  - name: PJM Emergency Load Response (Voltus / ELRP)
     capacity_payment_per_kw_yr: 70.0
     energy_payment_per_kwh: 0.0
     max_events_per_year: 10
@@ -182,6 +182,9 @@ dr_programs_evaluated:
     event_duration_hr: 2
     notification_hr: 0.5
     committed_kw: 1250
+    # Already enrolled via Voltus (manual). See joliet.yaml DR section for full rationale.
+    currently_enrolled: true
+    current_committed_kw: 250
   - name: ComEd Voluntary Load Response
     capacity_payment_per_kw_yr: 45.0
     energy_payment_per_kwh: 0.05
@@ -190,6 +193,8 @@ dr_programs_evaluated:
     event_duration_hr: 2
     notification_hr: 2.0
     committed_kw: 1250
+    currently_enrolled: false
+    current_committed_kw: 0
   - name: PJM Economic Load Response (Energy)
     capacity_payment_per_kw_yr: 0.0
     energy_payment_per_kwh: 0.08
@@ -198,6 +203,8 @@ dr_programs_evaluated:
     event_duration_hr: 2
     notification_hr: 1.0
     committed_kw: 1250
+    currently_enrolled: false
+    current_committed_kw: 0
 
 solar_synthesis:
   dc_capacity_kw: 2500        # ~2 MW AC with 1.25 DC/AC → ~2.5 MW DC nameplate

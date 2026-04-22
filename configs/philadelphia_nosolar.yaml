@@ -96,8 +96,12 @@ export:
   rate_per_kwh_if_allowed: 0.0
 
 battery:
-  power_kw: 1250
-  energy_kwh: 2535
+  # Right-sized to the site per the plateau analysis (deepest extreme drop in returns
+  # occurs at 750→1000 kW: marginal value collapses from $41.61/added-kWh to $0.41).
+  # Philly site peaks at ~700 kW, so 750 kW battery fully suppresses every on-peak hour;
+  # anything bigger has no work to do.
+  power_kw: 750
+  energy_kwh: 1521
   coupling: AC
   chemistry: Li-ion
   rte_ac_ac: 0.88
@@ -133,14 +137,18 @@ value_streams:
   ancillary: false
 
 dr_programs_evaluated:
-  - name: PJM Emergency Load Response (Capacity)
+  - name: PJM Emergency Load Response (Voltus / ELRP)
     capacity_payment_per_kw_yr: 70.0
     energy_payment_per_kwh: 0.0
     max_events_per_year: 10
     max_hours_per_year: 60
     event_duration_hr: 2
     notification_hr: 0.5
-    committed_kw: 1250
+    committed_kw: 750
+    # Already enrolled via Voltus (manual). Smaller site → smaller current manual commit
+    # (~50-150 kW typical). Battery enables expanding to 750 kW via contract amendment.
+    currently_enrolled: true
+    current_committed_kw: 100
   - name: PJM Economic Load Response (Energy)
     capacity_payment_per_kw_yr: 0.0
     energy_payment_per_kwh: 0.08
@@ -148,7 +156,9 @@ dr_programs_evaluated:
     max_hours_per_year: 999
     event_duration_hr: 2
     notification_hr: 1.0
-    committed_kw: 1250
+    committed_kw: 750
+    currently_enrolled: false
+    current_committed_kw: 0
 
 # Solar is disabled for this scenario, but the synthesis block is still required
 # for the code path. Values below are placeholders.

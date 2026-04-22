@@ -45,15 +45,35 @@ from typing import Optional
 class DRProgramValue:
     name: str
     kind: str                         # "capacity_emergency" | "capacity_voluntary" | "economic_energy"
-    capacity_revenue: float
-    energy_revenue: float
+    capacity_revenue_gross: float     # at full battery committed_kw
+    energy_revenue_gross: float
     opportunity_cost_vs_baseline: float
-    net_annual_value: float
+    net_annual_value_gross: float     # value if newly enrolled at full battery committed kW
+    # ── New: incremental value over current enrollment ─────────────────────────────
+    currently_enrolled: bool          # is the site already in this program?
+    current_committed_kw: float       # current commitment (manual/curtailment-based)
+    incremental_committed_kw: float   # added kW from battery (committed_kw − current_committed_kw)
+    net_annual_value_incremental: float   # incremental net value (battery-enabled expansion)
     notes: str = ""
 
     @property
     def gross(self) -> float:
-        return self.capacity_revenue + self.energy_revenue
+        return self.capacity_revenue_gross + self.energy_revenue_gross
+
+    # Back-compat alias for older code paths that referenced these names
+    @property
+    def capacity_revenue(self) -> float:
+        return self.capacity_revenue_gross
+
+    @property
+    def energy_revenue(self) -> float:
+        return self.energy_revenue_gross
+
+    @property
+    def net_annual_value(self) -> float:
+        """The HEADLINE net value used in stacking and reporting — incremental if
+        already enrolled (since gross would double-count current revenue), gross otherwise."""
+        return self.net_annual_value_incremental if self.currently_enrolled else self.net_annual_value_gross
 
 
 def _event_overlap_fraction_with_plc() -> float:
@@ -71,14 +91,16 @@ def evaluate_dr_program(
     baseline_battery_plc_value_per_kw: float = 98.70,   # ≈ $0.27043×365, from bill
     baseline_battery_dfc_value_per_kw: float = 160.0,   # ≈ 12 × $13.46, but only ~2 hr can be shaved
 ) -> DRProgramValue:
-    """Evaluate a single DR program on a standalone basis (gross value + honest opportunity cost).
+    """Evaluate a single DR program with both gross and incremental value.
 
-    Opportunity cost model:
-      Capacity programs lock committed_kW of battery capability for event hours. Some of
-      those event hours coincide with PLC hours (high overlap) — in those hours, we'd
-      dispatch the battery anyway, so no conflict. Some coincide with DFC target hours on
-      non-PLC days — potential conflict because DR dispatch forces full kW rather than
-      optimized peak-shaving. We account for this as a small, bounded opportunity cost.
+    Gross value = revenue if NEWLY enrolling the battery at full committed kW.
+    Incremental value = revenue from EXPANDING an existing enrollment by adding the
+    battery's capacity (= incremental_kw × capacity_rate). For programs the site is
+    NOT currently enrolled in, gross == incremental.
+
+    The headline `net_annual_value` (used in stacking and reporting) returns the
+    incremental value if the site is already enrolled, since claiming the gross
+    value would double-count revenue the site is already collecting.
     """
     name = program_cfg["name"]
     kw = program_cfg["committed_kw"]
@@ -88,75 +110,115 @@ def evaluate_dr_program(
     max_events = program_cfg["max_events_per_year"]
     evt_dur = program_cfg["event_duration_hr"]
 
-    capacity_revenue = cap_pay * kw
+    currently_enrolled = bool(program_cfg.get("currently_enrolled", False))
+    current_committed_kw = float(program_cfg.get("current_committed_kw", 0.0))
+    incremental_kw = max(0.0, kw - current_committed_kw) if currently_enrolled else kw
+
+    # Gross at full kW
+    capacity_revenue_gross = cap_pay * kw
     expected_event_hrs = min(max_hrs, max_events * evt_dur) * 0.70  # programs dispatch ~70% of cap
-    energy_revenue = en_pay * kw * expected_event_hrs
+    energy_revenue_gross = en_pay * kw * expected_event_hrs
 
     if cap_pay > 0 and en_pay == 0:
         kind = "capacity_emergency" if "Emergency" in name or "emergency" in name else "capacity_voluntary"
     elif cap_pay > 0 and en_pay > 0:
-        kind = "capacity_voluntary"  # programs that blend (like ComEd VLR)
+        kind = "capacity_voluntary"
     else:
         kind = "economic_energy"
 
     if kind == "economic_energy":
-        # Economic DR: battery bids into the energy market when LMP is high. This is
-        # effectively energy arbitrage. The "energy_payment" rate is the effective $/kWh
-        # above baseline LMP during dispatch — fully additive because dispatch only
-        # happens when profitable. Opportunity cost ~ 0.
-        opp = 0.0
-        notes = ("Dispatches only when economically favorable; stacks with capacity DR "
-                 "and with the core battery value streams.")
+        # Economic DR: dispatch only when LMP > marginal cost. Opportunity cost ~ 0.
+        opp_gross = 0.0
+        opp_inc = 0.0
+        if currently_enrolled:
+            notes = ("Already enrolled — gross value shown is the full re-enrollment "
+                     "value; incremental shown subtracts current committed kW.")
+        else:
+            notes = ("Dispatches only when economically favorable; stacks with capacity DR "
+                     "and with the core battery value streams. NEW program registration required.")
     else:
-        # Capacity DR: committed_kW during event hours. Some event hours overlap with
-        # PLC (positive — we're already discharging there, so DR payment is free). Others
-        # land on non-PLC days — small opportunity cost from forced full discharge.
-        overlap_plc = _event_overlap_fraction_with_plc()
-        overlap_dfc = _event_overlap_fraction_with_dfc()
+        # Capacity DR opportunity cost (small, ~$15-25/kW-yr equivalent at typical assumptions)
+        opp_gross = 0.05 * baseline_battery_dfc_value_per_kw * kw * 0.2
+        opp_inc = 0.05 * baseline_battery_dfc_value_per_kw * incremental_kw * 0.2
+        if currently_enrolled:
+            notes = (f"Already enrolled (current commit ~{current_committed_kw:.0f} kW). "
+                     f"Battery enables expanding commitment by {incremental_kw:.0f} kW × ${cap_pay}/kW-yr "
+                     f"via contract amendment with existing CSP — no new program enrollment.")
+        else:
+            notes = (f"Not currently enrolled. Full commitment of {kw:.0f} kW × ${cap_pay}/kW-yr. "
+                     f"Mutually exclusive with other capacity DR programs.")
 
-        # Non-PLC event hours: ~20% of event hours, on non-peak-system days. Battery
-        # would normally dispatch there for DFC; forced full discharge may shave slightly
-        # more than optimal, creating small gain OR small loss. Net ~ 0 expected.
-        # BUT: if DR event prevents end-of-month peak-save on a different day, that's the
-        # cost. Bound it at: 20% of annual DFC value × (committed_kW / typical shave).
-        # For a 1500 kW commitment on a ~500 kW typical DFC shave, this is ~5% of DFC value.
-        opp = 0.05 * baseline_battery_dfc_value_per_kw * kw * 0.2  # small
+    net_gross = capacity_revenue_gross + energy_revenue_gross - opp_gross
+    # Incremental: scale revenues by incremental_kw / kw ratio
+    inc_ratio = (incremental_kw / kw) if kw > 0 else 0.0
+    net_inc = (capacity_revenue_gross * inc_ratio) + (energy_revenue_gross * inc_ratio) - opp_inc
 
-        notes = (f"Event hours overlap ~{overlap_plc*100:.0f}% with PLC hours (free) "
-                 f"and ~{overlap_dfc*100:.0f}% with DFC target hours (minor conflict). "
-                 f"Only one capacity DR registration per asset (this vs other capacity DR).")
-
-    net = capacity_revenue + energy_revenue - opp
     return DRProgramValue(
         name=name, kind=kind,
-        capacity_revenue=capacity_revenue,
-        energy_revenue=energy_revenue,
-        opportunity_cost_vs_baseline=opp,
-        net_annual_value=net,
+        capacity_revenue_gross=capacity_revenue_gross,
+        energy_revenue_gross=energy_revenue_gross,
+        opportunity_cost_vs_baseline=opp_inc if currently_enrolled else opp_gross,
+        net_annual_value_gross=net_gross,
+        currently_enrolled=currently_enrolled,
+        current_committed_kw=current_committed_kw,
+        incremental_committed_kw=incremental_kw,
+        net_annual_value_incremental=net_inc,
         notes=notes,
     )
 
 
 def recommend_stack(programs: list[DRProgramValue]) -> dict:
-    """Choose best capacity program + add Economic-DR on top. Return stack + total."""
-    caps = [p for p in programs if p.kind.startswith("capacity")]
-    econs = [p for p in programs if p.kind == "economic_energy"]
-    best_cap = max(caps, key=lambda p: p.net_annual_value) if caps else None
+    """Two-tier DR recommendation:
 
-    stack = []
-    total = 0.0
-    if best_cap is not None:
-        stack.append(best_cap.name)
-        total += best_cap.net_annual_value
-    for e in econs:
-        stack.append(e.name)
-        total += e.net_annual_value
+    Tier 1 — "Already-doing" (lowest-friction add):
+        Programs the site is currently enrolled in. Battery just expands the committed
+        kW via a contract amendment with the existing CSP. No new program registration,
+        no new vendor, ops team is already comfortable with the program. INCREMENTAL
+        value is the headline because we're not double-counting current revenue.
+
+    Tier 2 — "Additional new program" (low-friction, but new enrollment required):
+        Programs not currently active. Stack additively on Tier 1. Requires setting up
+        a new CSP registration but no operational disruption (battery handles dispatch).
+
+    The headline savings the user pitches is Battery + Tier 1. Tier 2 is shown as
+    an additional option.
+    """
+    enrolled = [p for p in programs if p.currently_enrolled]
+    not_enrolled = [p for p in programs if not p.currently_enrolled]
+
+    # Tier 1: pick best currently-enrolled program (typically the only one — sites can't
+    # double-dip capacity DR). Incremental value is the headline.
+    tier1 = []
+    tier1_total = 0.0
+    if enrolled:
+        # If somehow multiple enrolled, pick the one with highest incremental value
+        best_enrolled = max(enrolled, key=lambda p: p.net_annual_value)
+        tier1.append(best_enrolled.name)
+        tier1_total = best_enrolled.net_annual_value
+
+    # Tier 2: among non-enrolled programs, exclude conflicting capacity-DR (since
+    # already in Tier 1 capacity). Include economic-energy + any non-conflicting types.
+    tier2 = []
+    tier2_total = 0.0
+    has_capacity_in_tier1 = any(p.kind.startswith("capacity") for p in enrolled) if enrolled else False
+    for p in not_enrolled:
+        if has_capacity_in_tier1 and p.kind.startswith("capacity"):
+            continue   # mutually exclusive with Tier 1 capacity DR
+        tier2.append(p.name)
+        tier2_total += p.net_annual_value
 
     return {
-        "recommended_stack": stack,
-        "stacked_annual_value": total,
-        "rationale": ("Pick the single highest-net capacity DR (mutually exclusive per asset) "
-                      "and add Economic DR on top (stacks freely)."),
+        "tier1_names": tier1,
+        "tier1_total": tier1_total,
+        "tier2_names": tier2,
+        "tier2_total": tier2_total,
+        # Back-compat fields used by the existing report template
+        "recommended_stack": tier1 + tier2,
+        "stacked_annual_value": tier1_total + tier2_total,
+        "rationale": ("Tier 1 = currently-enrolled program (battery expands committed kW via "
+                      "contract amendment — no new enrollment needed). Tier 2 = additional "
+                      "non-enrolled programs that stack freely (require new CSP registration "
+                      "but no operational impact)."),
     }
 
 

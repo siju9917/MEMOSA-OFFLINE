@@ -39,13 +39,27 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <p style="color:#6b7280">Generated {{generated_at}}</p>
 
 <div class="hero">
-  <div>Annual $ saved by battery — point estimate (MEMOSA controls, PF × gap-factor)</div>
-  <div class="big">${{mpc_savings_fmt}}</div>
-  <div style="color:#374151; margin-top: 0.6em; font-size: 1.1em">
-    <strong>Confidence band (Monte Carlo, N=20 joint samples):</strong><br>
-    P10 <strong>${{mc_p10_fmt}}</strong> &nbsp;|&nbsp; P50 <strong>${{mc_p50_fmt}}</strong> &nbsp;|&nbsp; P90 <strong>${{mc_p90_fmt}}</strong> &nbsp; (μ ${{mc_mean_fmt}} ± σ ${{mc_std_fmt}})
+  <div>Annual $ saved — battery + expansion of currently-enrolled DR</div>
+  <div class="big">${{headline_with_tier1_fmt}}</div>
+  <div style="color:#374151; margin-top: 0.5em">
+    &nbsp;&nbsp;= Core battery savings <strong>${{mpc_savings_fmt}}</strong>
+    &nbsp; + &nbsp; Existing DR expansion (incremental) <strong>${{tier1_total_fmt}}</strong>
   </div>
-  <div style="color:#6b7280; margin-top: 0.5em">
+  <div style="color:#0f766e; margin-top: 0.5em; font-style: italic">
+    {{tier1_names_fmt}} — already enrolled (per site project list). Battery enables
+    expanding committed kW via contract amendment with existing CSP. No new program
+    registration, no new vendor, no new operational changes.
+  </div>
+  <div style="color:#1e3a8a; margin-top: 1em; padding: 0.5em 0.8em; background: #eff6ff; border-radius: 6px">
+    <strong>Optional additional value if you also enroll in NEW programs:</strong>
+    +${{tier2_total_fmt}}/yr from {{tier2_names_fmt}}<br>
+    <span style="color:#3b82f6">→ Combined potential (battery + tier 1 + tier 2): <strong>${{combined_with_tier2_fmt}}/yr</strong></span>
+  </div>
+  <div style="color:#374151; margin-top: 1em; font-size: 0.95em">
+    <strong>Battery-only confidence band (Monte Carlo, N=20):</strong>
+    P10 <strong>${{mc_p10_fmt}}</strong> &nbsp;|&nbsp; P50 <strong>${{mc_p50_fmt}}</strong> &nbsp;|&nbsp; P90 <strong>${{mc_p90_fmt}}</strong>
+  </div>
+  <div style="color:#6b7280; margin-top: 0.5em; font-size: 0.9em">
     Perfect-foresight upper bound: ${{pf_savings_fmt}} &nbsp;|&nbsp; Rule-based floor: ${{rb_savings_fmt}}<br>
     Realized-dispatch reference (5-seed mean): ${{seed_mean_fmt}} (stderr ${{seed_stderr_fmt}})
   </div>
@@ -68,16 +82,17 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   <tr class="stream-row"><td><strong>Total</strong></td><td class="num"><strong>${{mpc_savings_fmt}}</strong></td><td class="num">100.0%</td></tr>
 </table>
 
-<h2>3. DR program opportunity value (honest stacking analysis)</h2>
-<p>Each row is that program's <strong>standalone</strong> net value. They are <strong>not</strong> all additive to each other — PJM and ComEd capacity DR programs are mutually exclusive per asset (one registration only). Economic DR can stack freely with capacity DR. The opportunity cost column reflects the conflict between forced-DR dispatch and the core battery streams (DFC / PLC / NSPL) that we'd otherwise optimize; it is small because DR event hours mostly overlap with hours the battery would dispatch anyway.</p>
+<h2>3. DR program opportunity value (honest stacking + enrollment analysis)</h2>
+<p>The "Status" column states whether the site is <strong>currently enrolled</strong> in this program (sites in this study are all enrolled in PJM Emergency Load Response via Voltus, manual control). For currently-enrolled programs, the headline net value is the <strong>incremental</strong> revenue from expanding the committed kW with battery capacity — it is NOT the gross program value (which would double-count what the site is already collecting). For non-enrolled programs, the headline equals the gross.</p>
+<p>Capacity DR programs are mutually exclusive per asset (one registration only), so adding a different one means switching, not stacking. Economic Energy DR stacks freely with capacity DR.</p>
 <table>
-  <tr><th>Program</th><th>Type</th><th class="num">Capacity revenue</th><th class="num">Energy revenue</th><th class="num">Opp cost vs baseline</th><th class="num">Net standalone value</th></tr>
+  <tr><th>Program</th><th>Type</th><th>Status</th><th class="num">Gross value (full enrollment)</th><th class="num">Reported net value</th></tr>
   {{dr_rows}}
 </table>
 <div class="note" style="margin-top: 1em">
   <strong>Recommended stack:</strong> {{dr_stack_names}}<br>
-  <strong>Stacked annual value:</strong> ${{dr_stack_total}}<br>
-  Add this to the core battery value above for total annual benefit if enrolled.
+  <strong>Stacked incremental annual value:</strong> ${{dr_stack_total}}<br>
+  This is purely additive to the core battery value above (no double-count with existing operations).
 </div>
 
 <h2>4. Dispatch comparison (Perfect Foresight vs MEMOSA controls vs Rule-Based)</h2>
@@ -323,13 +338,21 @@ def build_report(
         "economic_energy": "Economic (Energy-only)",
     }
     for dr in dr_values:
+        if dr.currently_enrolled:
+            status = (
+                f"Already enrolled — current commit ~{dr.current_committed_kw:.0f} kW; "
+                f"battery enables +{dr.incremental_committed_kw:.0f} kW via amendment"
+            )
+            row_style = ' style="background:#ecfdf5;"'
+        else:
+            status = "Not enrolled — would require new program registration"
+            row_style = ''
         dr_rows += (
-            f'<tr><td>{dr.name}</td>'
+            f'<tr{row_style}><td>{dr.name}</td>'
             f'<td>{kind_label.get(dr.kind, dr.kind)}</td>'
-            f'<td class="num">${_fmt_dollar(dr.capacity_revenue)}</td>'
-            f'<td class="num">${_fmt_dollar(dr.energy_revenue)}</td>'
-            f'<td class="num">${_fmt_dollar(dr.opportunity_cost_vs_baseline)}</td>'
-            f'<td class="num">${_fmt_dollar(dr.net_annual_value)}</td></tr>\n'
+            f'<td>{status}</td>'
+            f'<td class="num">${_fmt_dollar(dr.net_annual_value_gross)}</td>'
+            f'<td class="num"><strong>${_fmt_dollar(dr.net_annual_value)}</strong></td></tr>\n'
         )
 
     scenario_rows = ""
@@ -528,6 +551,24 @@ def build_report(
         "{{mc_std_fmt}}": _fmt_dollar(mc["std"]),
         "{{dr_stack_names}}": ", ".join(dr_stack["recommended_stack"]) or "none",
         "{{dr_stack_total}}": _fmt_dollar(dr_stack["stacked_annual_value"]),
+        "{{dr_stack_total_fmt}}": _fmt_dollar(dr_stack["stacked_annual_value"]),
+        "{{total_with_dr_fmt}}": _fmt_dollar(
+            comparison_mpc["battery_value_annual"] + dr_stack["stacked_annual_value"]
+        ),
+        # Tier-1 (already-enrolled program expansion) headline
+        "{{tier1_total_fmt}}": _fmt_dollar(dr_stack.get("tier1_total", 0)),
+        "{{tier1_names_fmt}}": ", ".join(dr_stack.get("tier1_names", [])) or "(none currently enrolled)",
+        "{{headline_with_tier1_fmt}}": _fmt_dollar(
+            comparison_mpc["battery_value_annual"] + dr_stack.get("tier1_total", 0)
+        ),
+        # Tier-2 (new programs that could be added on top)
+        "{{tier2_total_fmt}}": _fmt_dollar(dr_stack.get("tier2_total", 0)),
+        "{{tier2_names_fmt}}": ", ".join(dr_stack.get("tier2_names", [])) or "(none recommended)",
+        "{{combined_with_tier2_fmt}}": _fmt_dollar(
+            comparison_mpc["battery_value_annual"]
+            + dr_stack.get("tier1_total", 0)
+            + dr_stack.get("tier2_total", 0)
+        ),
         "{{stream_rows}}":    stream_rows,
         "{{dr_rows}}":        dr_rows,
         "{{scenario_rows}}":  scenario_rows,

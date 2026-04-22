@@ -201,7 +201,7 @@ value_streams:
   ancillary: false
 
 dr_programs_evaluated:
-  - name: PJM Emergency Load Response (Capacity)
+  - name: PJM Emergency Load Response (Voltus / ELRP)
     capacity_payment_per_kw_yr: 70.0   # typical Base Residual Auction clear × performance
     energy_payment_per_kwh: 0.0
     max_events_per_year: 10
@@ -209,6 +209,12 @@ dr_programs_evaluated:
     event_duration_hr: 2
     notification_hr: 0.5
     committed_kw: 1500
+    # Site is ALREADY enrolled in this program via Voltus (manual control). The current
+    # manual commitment is limited by what cold-storage operations can safely shed without
+    # product impact — typical for cold storage is ~150-300 kW. Battery enables expanding
+    # commitment by a contract amendment with the existing CSP, NOT a new program.
+    currently_enrolled: true
+    current_committed_kw: 250
   - name: ComEd Voluntary Load Response
     capacity_payment_per_kw_yr: 45.0
     energy_payment_per_kwh: 0.05
@@ -217,6 +223,9 @@ dr_programs_evaluated:
     event_duration_hr: 2
     notification_hr: 2.0
     committed_kw: 1500
+    # Mutually exclusive with PJM ELRP at the same asset. Listed for completeness only.
+    currently_enrolled: false
+    current_committed_kw: 0
   - name: PJM Economic Load Response (Energy)
     capacity_payment_per_kw_yr: 0.0
     energy_payment_per_kwh: 0.08   # avg LMP at dispatch × site-specific adder
@@ -225,6 +234,10 @@ dr_programs_evaluated:
     event_duration_hr: 2
     notification_hr: 1.0
     committed_kw: 1500
+    # Not currently enrolled. Stacks freely with PJM ELRP. Requires NEW program
+    # registration (typically through Voltus or another CSP) — easy but not zero-friction.
+    currently_enrolled: false
+    current_committed_kw: 0
 
 # Export/net-metering. ComEd DG net metering is limited to systems <=2 MW nonres;
 # site is ~4 MW PV so not eligible. Assume no compensation for net export (battery

@@ -284,8 +284,14 @@ def run(cfg_path: str):
         print(f"  {d.name} ({d.kind}): gross ${d.gross:,.0f}  opp-cost ${d.opportunity_cost_vs_baseline:,.0f}  "
               f"NET ${d.net_annual_value:,.0f}")
     stack = recommend_stack(dr_values)
-    print(f"  Recommended stack: {stack['recommended_stack']}")
-    print(f"  Stacked annual value: ${stack['stacked_annual_value']:,.0f}")
+    headline_t1 = comparison_mpc["battery_value_annual"] + stack.get("tier1_total", 0)
+    combined_t1_t2 = headline_t1 + stack.get("tier2_total", 0)
+    print()
+    print(f"  >>> HEADLINE (battery + currently-enrolled DR expansion): ${headline_t1:,.0f}/yr")
+    print(f"        Core battery only:                 ${comparison_mpc['battery_value_annual']:,.0f}")
+    print(f"        Tier 1 incremental DR (existing):  ${stack.get('tier1_total', 0):,.0f}  ({', '.join(stack.get('tier1_names', [])) or 'none'})")
+    print(f"  >>> Optional tier-2 (NEW program enroll): +${stack.get('tier2_total', 0):,.0f}  ({', '.join(stack.get('tier2_names', [])) or 'none'})")
+    print(f"  >>> Combined with both tiers: ${combined_t1_t2:,.0f}/yr")
 
     # --- 9. Tornado sensitivity
     print("\n[10/11] Tornado sensitivity (8 inputs, ~16 LP solves) ...")

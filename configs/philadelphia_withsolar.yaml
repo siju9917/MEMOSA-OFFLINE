@@ -82,8 +82,11 @@ export:
   rate_per_kwh_if_allowed: 0.0
 
 battery:
-  power_kw: 1250
-  energy_kwh: 2535
+  # Right-sized to match the no-solar plateau analysis (750 kW). With a hypothetical
+  # 500 kW solar present, even smaller (500 kW) is technically capex-optimal, but we
+  # keep 750 kW for direct comparability between the two Philly scenarios.
+  power_kw: 750
+  energy_kwh: 1521
   coupling: AC
   chemistry: Li-ion
   rte_ac_ac: 0.88
@@ -119,14 +122,16 @@ value_streams:
   ancillary: false
 
 dr_programs_evaluated:
-  - name: PJM Emergency Load Response (Capacity)
+  - name: PJM Emergency Load Response (Voltus / ELRP)
     capacity_payment_per_kw_yr: 70.0
     energy_payment_per_kwh: 0.0
     max_events_per_year: 10
     max_hours_per_year: 60
     event_duration_hr: 2
     notification_hr: 0.5
-    committed_kw: 1250
+    committed_kw: 750
+    currently_enrolled: true
+    current_committed_kw: 100
   - name: PJM Economic Load Response (Energy)
     capacity_payment_per_kw_yr: 0.0
     energy_payment_per_kwh: 0.08
@@ -134,7 +139,9 @@ dr_programs_evaluated:
     max_hours_per_year: 999
     event_duration_hr: 2
     notification_hr: 1.0
-    committed_kw: 1250
+    committed_kw: 750
+    currently_enrolled: false
+    current_committed_kw: 0
 
 # HYPOTHETICAL 500 kW AC solar system. No measured data.
 # Clear-sky envelope + monthly CSF for Mid-Atlantic, rescaled to ~16% annual CF
