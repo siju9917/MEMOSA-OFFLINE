@@ -21,16 +21,30 @@
 </head>
 <body>
 <h1>Battery Value Evaluation — Joliet</h1>
-<p style="color:#6b7280">Generated 2026-04-22 20:24</p>
+<p style="color:#6b7280">Generated 2026-04-22 21:09</p>
 
 <div class="hero">
-  <div>Annual $ saved by battery — point estimate (MEMOSA controls, PF × gap-factor)</div>
-  <div class="big">$207,531</div>
-  <div style="color:#374151; margin-top: 0.6em; font-size: 1.1em">
-    <strong>Confidence band (Monte Carlo, N=20 joint samples):</strong><br>
-    P10 <strong>$178,504</strong> &nbsp;|&nbsp; P50 <strong>$193,224</strong> &nbsp;|&nbsp; P90 <strong>$227,908</strong> &nbsp; (μ $199,347 ± σ $19,698)
+  <div>Annual $ saved — battery + expansion of currently-enrolled DR</div>
+  <div class="big">$293,031</div>
+  <div style="color:#374151; margin-top: 0.5em">
+    &nbsp;&nbsp;= Core battery savings <strong>$207,531</strong>
+    &nbsp; + &nbsp; Existing DR expansion (incremental) <strong>$85,500</strong>
   </div>
-  <div style="color:#6b7280; margin-top: 0.5em">
+  <div style="color:#0f766e; margin-top: 0.5em; font-style: italic">
+    PJM Emergency Load Response (Voltus / ELRP) — already enrolled (per site project list). Battery enables
+    expanding committed kW via contract amendment with existing CSP. No new program
+    registration, no new vendor, no new operational changes.
+  </div>
+  <div style="color:#1e3a8a; margin-top: 1em; padding: 0.5em 0.8em; background: #eff6ff; border-radius: 6px">
+    <strong>Optional additional value if you also enroll in NEW programs:</strong>
+    +$83,916/yr from PJM Economic Load Response (Energy)<br>
+    <span style="color:#3b82f6">→ Combined potential (battery + tier 1 + tier 2): <strong>$376,947/yr</strong></span>
+  </div>
+  <div style="color:#374151; margin-top: 1em; font-size: 0.95em">
+    <strong>Battery-only confidence band (Monte Carlo, N=20):</strong>
+    P10 <strong>$178,504</strong> &nbsp;|&nbsp; P50 <strong>$193,224</strong> &nbsp;|&nbsp; P90 <strong>$227,908</strong>
+  </div>
+  <div style="color:#6b7280; margin-top: 0.5em; font-size: 0.9em">
     Perfect-foresight upper bound: $259,007 &nbsp;|&nbsp; Rule-based floor: $21,763<br>
     Realized-dispatch reference (5-seed mean): $207,531 (stderr $4,310)
   </div>
@@ -58,19 +72,20 @@
   <tr class="stream-row"><td><strong>Total</strong></td><td class="num"><strong>$207,531</strong></td><td class="num">100.0%</td></tr>
 </table>
 
-<h2>3. DR program opportunity value (honest stacking analysis)</h2>
-<p>Each row is that program's <strong>standalone</strong> net value. They are <strong>not</strong> all additive to each other — PJM and ComEd capacity DR programs are mutually exclusive per asset (one registration only). Economic DR can stack freely with capacity DR. The opportunity cost column reflects the conflict between forced-DR dispatch and the core battery streams (DFC / PLC / NSPL) that we'd otherwise optimize; it is small because DR event hours mostly overlap with hours the battery would dispatch anyway.</p>
+<h2>3. DR program opportunity value (honest stacking + enrollment analysis)</h2>
+<p>The "Status" column states whether the site is <strong>currently enrolled</strong> in this program (sites in this study are all enrolled in PJM Emergency Load Response via Voltus, manual control). For currently-enrolled programs, the headline net value is the <strong>incremental</strong> revenue from expanding the committed kW with battery capacity — it is NOT the gross program value (which would double-count what the site is already collecting). For non-enrolled programs, the headline equals the gross.</p>
+<p>Capacity DR programs are mutually exclusive per asset (one registration only), so adding a different one means switching, not stacking. Economic Energy DR stacks freely with capacity DR.</p>
 <table>
-  <tr><th>Program</th><th>Type</th><th class="num">Capacity revenue</th><th class="num">Energy revenue</th><th class="num">Opp cost vs baseline</th><th class="num">Net standalone value</th></tr>
-  <tr><td>PJM Emergency Load Response (Capacity)</td><td>Capacity (Emergency)</td><td class="num">$105,000</td><td class="num">$0</td><td class="num">$2,400</td><td class="num">$102,600</td></tr>
-<tr><td>ComEd Voluntary Load Response</td><td>Capacity (Voluntary)</td><td class="num">$67,500</td><td class="num">$2,100</td><td class="num">$2,400</td><td class="num">$67,200</td></tr>
-<tr><td>PJM Economic Load Response (Energy)</td><td>Economic (Energy-only)</td><td class="num">$0</td><td class="num">$83,916</td><td class="num">$0</td><td class="num">$83,916</td></tr>
+  <tr><th>Program</th><th>Type</th><th>Status</th><th class="num">Gross value (full enrollment)</th><th class="num">Reported net value</th></tr>
+  <tr style="background:#ecfdf5;"><td>PJM Emergency Load Response (Voltus / ELRP)</td><td>Capacity (Emergency)</td><td>Already enrolled — current commit ~250 kW; battery enables +1250 kW via amendment</td><td class="num">$102,600</td><td class="num"><strong>$85,500</strong></td></tr>
+<tr><td>ComEd Voluntary Load Response</td><td>Capacity (Voluntary)</td><td>Not enrolled — would require new program registration</td><td class="num">$67,200</td><td class="num"><strong>$67,200</strong></td></tr>
+<tr><td>PJM Economic Load Response (Energy)</td><td>Economic (Energy-only)</td><td>Not enrolled — would require new program registration</td><td class="num">$83,916</td><td class="num"><strong>$83,916</strong></td></tr>
 
 </table>
 <div class="note" style="margin-top: 1em">
-  <strong>Recommended stack:</strong> PJM Emergency Load Response (Capacity), PJM Economic Load Response (Energy)<br>
-  <strong>Stacked annual value:</strong> $186,516<br>
-  Add this to the core battery value above for total annual benefit if enrolled.
+  <strong>Recommended stack:</strong> PJM Emergency Load Response (Voltus / ELRP), PJM Economic Load Response (Energy)<br>
+  <strong>Stacked incremental annual value:</strong> $169,416<br>
+  This is purely additive to the core battery value above (no double-count with existing operations).
 </div>
 
 <h2>4. Dispatch comparison (Perfect Foresight vs MEMOSA controls vs Rule-Based)</h2>

@@ -217,40 +217,60 @@
   },
   "dr_programs": [
     {
-      "name": "PJM Emergency Load Response (Capacity)",
+      "name": "PJM Emergency Load Response (Voltus / ELRP)",
       "kind": "capacity_emergency",
-      "capacity_revenue": 105000.0,
-      "energy_revenue": 0.0,
-      "opportunity_cost_vs_baseline": 2400.0,
-      "net_annual_value": 102600.0,
-      "notes": "Event hours overlap ~80% with PLC hours (free) and ~60% with DFC target hours (minor conflict). Only one capacity DR registration per asset (this vs other capacity DR)."
+      "capacity_revenue_gross": 105000.0,
+      "energy_revenue_gross": 0.0,
+      "opportunity_cost_vs_baseline": 2000.0,
+      "net_annual_value_gross": 102600.0,
+      "currently_enrolled": true,
+      "current_committed_kw": 250.0,
+      "incremental_committed_kw": 1250.0,
+      "net_annual_value_incremental": 85500.0,
+      "notes": "Already enrolled (current commit ~250 kW). Battery enables expanding commitment by 1250 kW \u00d7 $70.0/kW-yr via contract amendment with existing CSP \u2014 no new program enrollment."
     },
     {
       "name": "ComEd Voluntary Load Response",
       "kind": "capacity_voluntary",
-      "capacity_revenue": 67500.0,
-      "energy_revenue": 2100.0,
+      "capacity_revenue_gross": 67500.0,
+      "energy_revenue_gross": 2100.0,
       "opportunity_cost_vs_baseline": 2400.0,
-      "net_annual_value": 67200.0,
-      "notes": "Event hours overlap ~80% with PLC hours (free) and ~60% with DFC target hours (minor conflict). Only one capacity DR registration per asset (this vs other capacity DR)."
+      "net_annual_value_gross": 67200.0,
+      "currently_enrolled": false,
+      "current_committed_kw": 0.0,
+      "incremental_committed_kw": 1500,
+      "net_annual_value_incremental": 67200.0,
+      "notes": "Not currently enrolled. Full commitment of 1500 kW \u00d7 $45.0/kW-yr. Mutually exclusive with other capacity DR programs."
     },
     {
       "name": "PJM Economic Load Response (Energy)",
       "kind": "economic_energy",
-      "capacity_revenue": 0.0,
-      "energy_revenue": 83916.0,
+      "capacity_revenue_gross": 0.0,
+      "energy_revenue_gross": 83916.0,
       "opportunity_cost_vs_baseline": 0.0,
-      "net_annual_value": 83916.0,
-      "notes": "Dispatches only when economically favorable; stacks with capacity DR and with the core battery value streams."
+      "net_annual_value_gross": 83916.0,
+      "currently_enrolled": false,
+      "current_committed_kw": 0.0,
+      "incremental_committed_kw": 1500,
+      "net_annual_value_incremental": 83916.0,
+      "notes": "Dispatches only when economically favorable; stacks with capacity DR and with the core battery value streams. NEW program registration required."
     }
   ],
   "dr_recommended_stack": {
-    "recommended_stack": [
-      "PJM Emergency Load Response (Capacity)",
+    "tier1_names": [
+      "PJM Emergency Load Response (Voltus / ELRP)"
+    ],
+    "tier1_total": 85500.0,
+    "tier2_names": [
       "PJM Economic Load Response (Energy)"
     ],
-    "stacked_annual_value": 186516.0,
-    "rationale": "Pick the single highest-net capacity DR (mutually exclusive per asset) and add Economic DR on top (stacks freely)."
+    "tier2_total": 83916.0,
+    "recommended_stack": [
+      "PJM Emergency Load Response (Voltus / ELRP)",
+      "PJM Economic Load Response (Energy)"
+    ],
+    "stacked_annual_value": 169416.0,
+    "rationale": "Tier 1 = currently-enrolled program (battery expands committed kW via contract amendment \u2014 no new enrollment needed). Tier 2 = additional non-enrolled programs that stack freely (require new CSP registration but no operational impact)."
   },
   "plc_hours": [
     "2025-08-15 18:00:00-05:00",
