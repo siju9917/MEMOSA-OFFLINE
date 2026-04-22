@@ -23,6 +23,7 @@ from .dispatch.mpc import rolling_mpc_dispatch
 from .attribution import annual_cost_from_dispatch, compare_scenarios
 from .dr_eval import evaluate_all, recommend_stack
 from .sensitivity import run_tornado, run_monte_carlo
+from .sizing import run_sweep, detect_knee
 from .report import build_report
 
 
@@ -138,8 +139,8 @@ def run(cfg_path: str):
     comparison_pf = compare_scenarios(baseline_result, pf_result)
     print(f"  PF annual: ${pf_result.total:,.0f}  savings=${comparison_pf['battery_value_annual']:,.0f}")
 
-    # MPC (noisy foresight)
-    print("\n[8/9] Running MPC-realistic dispatch (noisy foresight) ...")
+    # MEMOSA controls (realistic-skill dispatch via noisy foresight)
+    print("\n[8/9] Running MEMOSA controls dispatch ...")
     mpc_df_raw = rolling_mpc_dispatch(
         year_df, battery, dict(cfg.delivery_tariff.dfc_per_kw_monthly),
         plc_hours, [nspl_hour], dict(cfg.mpc),
@@ -148,10 +149,10 @@ def run(cfg_path: str):
     )
     mpc_df = mpc_df_raw.join(year_df[["mdp1", "mdp2"]])
     mpc_result = annual_cost_from_dispatch(
-        mpc_df, ["mdp1", "mdp2"], delivery, supply, lmp, plc_hours, [nspl_hour], "MPC-realistic"
+        mpc_df, ["mdp1", "mdp2"], delivery, supply, lmp, plc_hours, [nspl_hour], "MEMOSA controls"
     )
     comparison_mpc = compare_scenarios(baseline_result, mpc_result)
-    print(f"  MPC annual: ${mpc_result.total:,.0f}  savings=${comparison_mpc['battery_value_annual']:,.0f}")
+    print(f"  MEMOSA controls annual: ${mpc_result.total:,.0f}  savings=${comparison_mpc['battery_value_annual']:,.0f}")
 
     # Rule-based
     print("\n  ... rule-based dispatch ...")
@@ -188,8 +189,26 @@ def run(cfg_path: str):
     for r in tornado:
         print(f"    {r['label']:<45} lo=${r['lo']:>10,.0f}  hi=${r['hi']:>10,.0f}  span=${r['span']:>10,.0f}")
 
+    # --- 9.5 Battery-size sweep
+    print("\n[10/12] Battery-size sweep (6 block sizes) ...")
+    sizes_cfg = cfg.get("battery_sizes_to_sweep", [])
+    sizes = [(s["power_kw"], s["energy_kwh"], s["label"]) for s in sizes_cfg]
+    sizing_results = run_sweep(
+        sizes, year_df, lmp, dict(cfg.battery), delivery, supply,
+        dict(cfg.delivery_tariff.dfc_per_kw_monthly),
+        plc_hours, nspl_hour, dict(cfg.mpc),
+        export_allowed=cfg.export.allowed,
+        export_rate=cfg.export.rate_per_kwh_if_allowed,
+    )
+    print(f"  {'Size':<20} {'Annual $':>12} {'Marg $/kWh':>14}")
+    for r in sizing_results:
+        print(f"  {r.label:<20} ${r.annual_savings:>10,.0f}  ${r.marginal_savings_per_added_kwh:>11.2f}")
+    knee = detect_knee(sizing_results, threshold_ratio=0.70)
+    print(f"  >>> Knee: {knee['knee_label']}  (${knee['knee_annual_savings']:,.0f}/yr, "
+          f"marginal ${knee['knee_marginal_per_kwh']:.2f}/added-kWh)")
+
     # --- 10. Monte Carlo
-    print("\n[11/11] Monte Carlo confidence band (20 samples) ...")
+    print("\n[11/12] Monte Carlo confidence band (20 samples) ...")
     mc = run_monte_carlo(
         year_df, lmp, battery, delivery, supply,
         dict(cfg.delivery_tariff.dfc_per_kw_monthly),
@@ -202,9 +221,9 @@ def run(cfg_path: str):
     print(f"  P10: ${mc['p10']:,.0f}   P50: ${mc['p50']:,.0f}   P90: ${mc['p90']:,.0f}")
     print(f"  Mean: ${mc['mean']:,.0f}  StDev: ${mc['std']:,.0f}")
 
-    # --- 11. Report
+    # --- 12. Report
     out_dir = Path("results") / cfg.site.name
-    print(f"\nBuilding report in {out_dir}/ ...")
+    print(f"\n[12/12] Building report in {out_dir}/ ...")
     html = build_report(
         out_dir=root / "results" / cfg.site.name,
         site_cfg=dict(cfg.site),
@@ -228,6 +247,8 @@ def run(cfg_path: str):
         tornado=tornado,
         mc=mc,
         dr_stack=stack,
+        sizing_results=sizing_results,
+        sizing_knee=knee,
     )
     print(f"Report: {html}")
     print("\nDone.")

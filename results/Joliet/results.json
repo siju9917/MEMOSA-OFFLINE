@@ -74,7 +74,7 @@
       }
     },
     "with_battery_detail": {
-      "scenario": "MPC-realistic",
+      "scenario": "MEMOSA controls",
       "total": 908819.5257713017,
       "delivery": 502010.6655136281,
       "supply": 406808.8602576736,
@@ -348,6 +348,68 @@
       "p90": 204406.2234649003,
       "mean": 194126.41816496695,
       "std": 11274.866394763447
+    }
+  },
+  "sizing": {
+    "sweep_results": [
+      {
+        "label": "250kW/507kWh",
+        "power_kw": 250,
+        "energy_kwh": 507,
+        "annual_savings": 46635.1240777357,
+        "marginal_savings_per_added_kwh": 91.9824932499718,
+        "included_in_knee": true
+      },
+      {
+        "label": "500kW/1014kWh",
+        "power_kw": 500,
+        "energy_kwh": 1014,
+        "annual_savings": 83284.37116312608,
+        "marginal_savings_per_added_kwh": 72.28648340313684,
+        "included_in_knee": true
+      },
+      {
+        "label": "750kW/1521kWh",
+        "power_kw": 750,
+        "energy_kwh": 1521,
+        "annual_savings": 118674.26343512465,
+        "marginal_savings_per_added_kwh": 69.80254885995774,
+        "included_in_knee": true
+      },
+      {
+        "label": "1000kW/2028kWh",
+        "power_kw": 1000,
+        "energy_kwh": 2028,
+        "annual_savings": 154008.50831615878,
+        "marginal_savings_per_added_kwh": 69.69279069237501,
+        "included_in_knee": true
+      },
+      {
+        "label": "1250kW/2535kWh",
+        "power_kw": 1250,
+        "energy_kwh": 2535,
+        "annual_savings": 187644.36668082932,
+        "marginal_savings_per_added_kwh": 66.342915906648,
+        "included_in_knee": true
+      },
+      {
+        "label": "1500kW/3042kWh",
+        "power_kw": 1500,
+        "energy_kwh": 3042,
+        "annual_savings": 211753.49791752617,
+        "marginal_savings_per_added_kwh": 47.55252709407662,
+        "included_in_knee": false
+      }
+    ],
+    "knee": {
+      "knee_label": "1250kW/2535kWh",
+      "knee_power_kw": 1250,
+      "knee_energy_kwh": 2535,
+      "knee_annual_savings": 187644.36668082932,
+      "best_marginal_per_kwh": 91.9824932499718,
+      "knee_marginal_per_kwh": 66.342915906648,
+      "threshold_ratio": 0.7,
+      "rationale": "Largest size whose added-kWh returned at least 70% of the best block's $91.98/added-kWh rate. Beyond this size, each additional kWh earns less than $64.39/yr, indicating diminishing returns."
     }
   }
 }

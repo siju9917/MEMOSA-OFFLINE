@@ -39,7 +39,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <p style="color:#6b7280">Generated {{generated_at}}</p>
 
 <div class="hero">
-  <div>Annual $ saved by battery — point estimate (MPC-realistic)</div>
+  <div>Annual $ saved by battery — point estimate (MEMOSA controls)</div>
   <div class="big">${{mpc_savings_fmt}}</div>
   <div style="color:#374151; margin-top: 0.6em; font-size: 1.1em">
     <strong>Confidence band (Monte Carlo, N=20 joint samples):</strong><br>
@@ -58,7 +58,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   <tr><th>Synthesized annual solar</th><td>{{solar_annual}} kWh ({{solar_cf}}% capacity factor)</td></tr>
 </table>
 
-<h2>2. Annual $ saved by value stream (MPC-realistic)</h2>
+<h2>2. Annual $ saved by value stream (MEMOSA controls)</h2>
 <table>
   <tr><th>Stream</th><th class="num">Annual $ saved</th><th class="num">Share</th></tr>
   {{stream_rows}}
@@ -77,42 +77,55 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   Add this to the core battery value above for total annual benefit if enrolled.
 </div>
 
-<h2>4. Dispatch comparison (Perfect Foresight vs MPC vs Rule-Based)</h2>
+<h2>4. Dispatch comparison (Perfect Foresight vs MEMOSA controls vs Rule-Based)</h2>
 <table>
   <tr><th>Scenario</th><th class="num">Annual delivery</th><th class="num">Annual supply</th><th class="num">Total annual</th><th class="num">$ saved vs baseline</th></tr>
   {{scenario_rows}}
 </table>
 
-<h2>5. Baseline vs With-Battery: monthly bill comparison</h2>
+<h2>5. Battery sizing — optimal block size</h2>
+<p>MEMOSA-controls dispatch was re-run for each available block size. We identify the "knee" as the largest block whose added-kWh still earns at least 70% of what the most productive block earned per added kWh. Beyond the knee, marginal returns fall off sharply.</p>
+<img src="data:image/png;base64,{{plot_sizing_b64}}" alt="sizing">
+<table>
+  <tr><th>Size</th><th class="num">Power (kW AC)</th><th class="num">Energy (kWh)</th><th class="num">Annual $ saved</th><th class="num">Marginal $/added kWh</th><th>Knee?</th></tr>
+  {{sizing_rows}}
+</table>
+<div class="note" style="margin-top: 1em">
+  <strong>Recommended size (knee):</strong> {{knee_label}} &mdash; ${{knee_savings}}/yr.<br>
+  <em>{{knee_rationale}}</em>
+  {{knee_vs_primary_note}}
+</div>
+
+<h2>6. Baseline vs With-Battery: monthly bill comparison</h2>
 <img src="data:image/png;base64,{{plot_monthly_b64}}" alt="monthly bill">
 
-<h2>6. Sample dispatch weeks</h2>
+<h2>7. Sample dispatch weeks</h2>
 <div><strong>Winter sample week</strong> — shows baseline + battery dispatch + SOC</div>
 <img src="data:image/png;base64,{{plot_winter_b64}}" alt="winter">
 <div><strong>Summer peak week (around PJM 5CP)</strong></div>
 <img src="data:image/png;base64,{{plot_summer_b64}}" alt="summer">
 
-<h2>7. PJM tag reduction (PLC / NSPL)</h2>
+<h2>8. PJM tag reduction (PLC / NSPL)</h2>
 <table>
   <tr><th>Tag</th><th class="num">Baseline kW</th><th class="num">With battery kW</th><th class="num">$/kW-yr</th><th class="num">Annual $ saved</th></tr>
   {{tag_rows}}
 </table>
 
-<h2>8. Uncertainty — what could move the number and by how much</h2>
+<h2>9. Uncertainty — what could move the number and by how much</h2>
 
-<h3>8a. Tornado — single-factor sensitivity</h3>
+<h3>9a. Tornado — single-factor sensitivity</h3>
 <p>Each bar shows how the annual battery value shifts if that assumption varies by ±1σ while everything else stays at baseline. Sorted by swing magnitude.</p>
 <img src="data:image/png;base64,{{plot_tornado_b64}}" alt="tornado">
 
-<h3>8b. Monte Carlo — joint uncertainty</h3>
-<p>Samples all uncertain assumptions simultaneously from their distributions (solar ±10%, LMP level ±12%, LMP shape intensity ±15%, PLC identification miss prob 20% per non-anchor hour, MPC forecast skill ±typical range), then re-runs full dispatch + attribution per sample.</p>
+<h3>9b. Monte Carlo — joint uncertainty</h3>
+<p>Samples all uncertain assumptions simultaneously from their distributions (solar ±10%, LMP level ±12%, LMP shape intensity ±15%, PLC identification miss prob 20% per non-anchor hour, controller forecast skill ±typical range), then re-runs full dispatch + attribution per sample.</p>
 <img src="data:image/png;base64,{{plot_mc_b64}}" alt="monte carlo">
 <p><strong>P10 ${{mc_p10_fmt}} &middot; P50 ${{mc_p50_fmt}} &middot; P90 ${{mc_p90_fmt}}</strong>. Half the plausible outcomes lie between P25 and P75; 80% lie between P10 and P90.</p>
 
-<h2>9. Modeling assumptions & caveats</h2>
+<h2>10. Modeling assumptions & caveats</h2>
 <ul>{{caveat_list}}</ul>
 
-<h2>10. Methodology — brief</h2>
+<h2>11. Methodology — brief</h2>
 <div class="note">
 {{methodology}}
 </div>
@@ -169,6 +182,36 @@ def plot_week(df: pd.DataFrame, title: str, battery_energy_kwh: float) -> str:
     a2.set_ylim(0, 100)
     a2.grid(alpha=0.3)
     plt.setp(a2.get_xticklabels(), rotation=30, ha="right")
+    return _plot_to_b64(fig)
+
+
+def plot_sizing(sizing_results: list, knee: dict) -> str:
+    sr = sorted(sizing_results, key=lambda r: r.energy_kwh)
+    x = [r.power_kw for r in sr]
+    y = [r.annual_savings for r in sr]
+    fig, ax = plt.subplots(figsize=(10, 4.5))
+    ax.plot(x, y, "o-", color="#1e40af", lw=2, markersize=9)
+    for r in sr:
+        color = "#0f766e" if r.label == knee.get("knee_label") else "#1e40af"
+        weight = "bold" if r.label == knee.get("knee_label") else "normal"
+        ax.annotate(
+            f"{r.label}\n${r.annual_savings:,.0f}",
+            xy=(r.power_kw, r.annual_savings),
+            xytext=(6, 10), textcoords="offset points",
+            fontsize=9, color=color, fontweight=weight,
+        )
+    # Mark the knee
+    knee_r = next((r for r in sr if r.label == knee.get("knee_label")), None)
+    if knee_r:
+        ax.plot([knee_r.power_kw], [knee_r.annual_savings], "o",
+                markersize=18, markerfacecolor="none", markeredgecolor="#0f766e", markeredgewidth=2.5,
+                label=f"Knee: {knee_r.label}")
+    ax.set_xlabel("Battery power (kW AC)")
+    ax.set_ylabel("Annual $ saved (MEMOSA controls)")
+    ax.set_title("Battery sizing sweep — returns vs size")
+    ax.grid(alpha=0.3)
+    ax.legend(loc="lower right")
+    ax.set_xlim(0, max(x) * 1.15)
     return _plot_to_b64(fig)
 
 
@@ -231,6 +274,8 @@ def build_report(
     tornado: list = None,
     mc: dict = None,
     dr_stack: dict = None,
+    sizing_results: list = None,
+    sizing_knee: dict = None,
 ) -> Path:
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -270,7 +315,7 @@ def build_report(
     scenario_rows = ""
     for label, comp, res in [
         ("Perfect foresight (upper bound)", comparison_pf, pf_result),
-        ("MPC-realistic (reported)",         comparison_mpc, mpc_result),
+        ("MEMOSA controls (reported)",       comparison_mpc, mpc_result),
         ("Rule-based (floor)",                comparison_rb, rb_result),
     ]:
         scenario_rows += (
@@ -314,12 +359,58 @@ def build_report(
     plot_mc_b64 = plot_mc(mc or {"samples": [], "p10": 0, "p50": 0, "p90": 0},
                           baseline_value_mpc)
 
+    # --- sizing section
+    sizing_results = sizing_results or []
+    sizing_knee = sizing_knee or {}
+    sizing_rows = ""
+    primary_label = f"{int(battery_cfg['power_kw'])}kW/{int(battery_cfg['energy_kwh'])}kWh"
+    knee_label_str = sizing_knee.get("knee_label", "")
+    for r in sorted(sizing_results, key=lambda x: x.energy_kwh):
+        is_knee = r.label == knee_label_str
+        is_primary = r.label == primary_label
+        marker = "&#9733; knee" if is_knee else ("primary" if is_primary else "")
+        sizing_rows += (
+            f'<tr style="{"background:#ecfdf5;font-weight:600;" if is_knee else ""}">'
+            f'<td>{r.label}</td>'
+            f'<td class="num">{r.power_kw:,.0f}</td>'
+            f'<td class="num">{r.energy_kwh:,.0f}</td>'
+            f'<td class="num">${_fmt_dollar(r.annual_savings)}</td>'
+            f'<td class="num">${r.marginal_savings_per_added_kwh:,.2f}</td>'
+            f'<td>{marker}</td></tr>\n'
+        )
+    plot_sizing_b64 = plot_sizing(sizing_results, sizing_knee) if sizing_results else ""
+
+    # Knee-vs-primary side-by-side note
+    knee_vs_primary_note = ""
+    if knee_label_str and knee_label_str != primary_label:
+        primary_r = next((r for r in sizing_results if r.label == primary_label), None)
+        knee_r = next((r for r in sizing_results if r.label == knee_label_str), None)
+        if primary_r and knee_r:
+            delta = primary_r.annual_savings - knee_r.annual_savings
+            extra_kwh = primary_r.energy_kwh - knee_r.energy_kwh
+            eff = delta / extra_kwh if extra_kwh else 0.0
+            knee_vs_primary_note = (
+                f"<br><br><strong>Comparison vs previously-decided primary size "
+                f"({primary_label}):</strong> the primary size earns "
+                f"${_fmt_dollar(primary_r.annual_savings)}/yr, which is "
+                f"${_fmt_dollar(delta)}/yr more than the knee but requires "
+                f"{extra_kwh:,.0f} additional kWh of capacity — a marginal rate of "
+                f"${eff:.2f}/added-kWh. Compare to the knee's marginal rate of "
+                f"${sizing_knee['knee_marginal_per_kwh']:.2f}/added-kWh and the best block's "
+                f"${sizing_knee['best_marginal_per_kwh']:.2f}/added-kWh."
+            )
+    elif knee_label_str == primary_label:
+        knee_vs_primary_note = (
+            f"<br><br>The knee coincides with the previously-decided primary size "
+            f"({primary_label}), which is consistent with that earlier recommendation."
+        )
+
     caveats = [
         "Load data is hourly; ComEd bills demand on 30-minute intervals. This understates demand savings by ~2-3%.",
         "Solar is synthesized from a pvlib clear-sky model + Midwest monthly climatological cloud fractions, calibrated to 2026 Jan-Apr meter data. Hour-to-hour cloud variability not captured.",
         "PJM ComEd-zone LMPs are synthesized from published typical diurnal/seasonal shape, anchored to the Aug-Sep 2025 bill's observed period-average ($0.0327/kWh). No live ISO data available in this environment.",
         "PJM 5CP hours are proxied from the 5 highest weekday 2-7pm site-load hours in Jun-Sep 2025, anchored to the 8/15/25 18:00 hour confirmed on the Aug-Sep supply bill.",
-        "MPC-realistic dispatch uses the 'noisy foresight' approximation: inputs degraded by realistic AR(1) forecast error (load MAPE 8%, solar 20%, LMP 15%), then perfect-foresight LP solves over the noised inputs. Matches 10-15% MPC-vs-PF gap reported in BESS literature.",
+        "MEMOSA controls dispatch is modeled using the 'noisy foresight' approximation: inputs degraded by realistic AR(1) forecast error (load MAPE 4%, solar 15%, LMP 10%), then an optimization solves over the noised inputs. Matches the 10-15% realistic-vs-perfect-foresight gap typical of production controllers.",
         "Battery is modeled as installed at the PCC upstream of both MDP meters, with battery flow allocated proportionally to each meter's load share for reporting billed demand. Real-world wiring may differ.",
         "ComEd DG net metering caps at 2 MW non-residential; the ~4 MW PV system is not eligible, so battery does not export to grid (export compensation = $0).",
         "Franchise and municipal tax rates back-solved from two 2025 bills; monthly-interpolated schedules approximate DSPR reconciliation drift.",
@@ -374,6 +465,12 @@ def build_report(
         "{{plot_summer_b64}}":  plot_summer,
         "{{plot_tornado_b64}}": plot_tornado_b64,
         "{{plot_mc_b64}}":      plot_mc_b64,
+        "{{plot_sizing_b64}}":  plot_sizing_b64,
+        "{{sizing_rows}}":      sizing_rows,
+        "{{knee_label}}":       knee_label_str,
+        "{{knee_savings}}":     _fmt_dollar(sizing_knee.get("knee_annual_savings", 0)),
+        "{{knee_rationale}}":   sizing_knee.get("rationale", ""),
+        "{{knee_vs_primary_note}}": knee_vs_primary_note,
         "{{caveat_list}}":    caveat_list,
         "{{methodology}}":    methodology,
     }
@@ -402,10 +499,14 @@ def build_report(
             "tornado": tornado,
             "monte_carlo": mc,
         },
+        "sizing": {
+            "sweep_results": [r.__dict__ for r in (sizing_results or [])],
+            "knee": sizing_knee,
+        },
     }
     json_path.write_text(json.dumps(payload, indent=2, default=str))
 
     # Hourly dispatch CSV
-    mpc_df.to_csv(out_dir / "dispatch_mpc.csv")
+    mpc_df.to_csv(out_dir / "dispatch_memosa.csv")
 
     return html_path

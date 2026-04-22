@@ -153,6 +153,16 @@ battery:
   # cycle-based degradation; not stepped year-by-year since scope = 1 year
   calendar_year_capacity_retention: 1.00
 
+# Block-size sweep for optimal-size analysis. All share the same chemistry/RTE
+# as the primary battery config above.
+battery_sizes_to_sweep:
+  - {power_kw: 250,  energy_kwh: 507,  label: "250kW/507kWh"}
+  - {power_kw: 500,  energy_kwh: 1014, label: "500kW/1014kWh"}
+  - {power_kw: 750,  energy_kwh: 1521, label: "750kW/1521kWh"}
+  - {power_kw: 1000, energy_kwh: 2028, label: "1000kW/2028kWh"}
+  - {power_kw: 1250, energy_kwh: 2535, label: "1250kW/2535kWh"}
+  - {power_kw: 1500, energy_kwh: 3042, label: "1500kW/3042kWh"}
+
 value_streams:
   dfc_reduction: true
   plc_reduction: true        # PJM 5CP capacity tag
