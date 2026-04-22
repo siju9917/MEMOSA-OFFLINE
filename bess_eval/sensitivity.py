@@ -105,6 +105,7 @@ def run_tornado(
     baseline_value: float,
     export_allowed: bool = False,
     export_rate: float = 0.0,
+    plc_reduction_value: float = 73875.0,
 ) -> list[dict]:
     """Perform tornado sensitivity: vary each assumption ±1σ, compute battery value delta."""
     def run(ylbl: str, **overrides):
@@ -130,9 +131,7 @@ def run_tornado(
     hi = run("solar +15%", year_df=s_hi)
     rows.append({"label": "Solar annual total (±15%)", "lo": lo, "hi": hi})
 
-    # 2. LMP level (±20%)
-    lo = run("lmp level -20%", lmp=lmp * 0.80)
-    hi = run("lmp level +20%", lmp=lmp * 1.20)
+    # 2. LMP level (±20%) — scale both the year_df column and the separate lmp series
     lo_df = year_df.copy(); lo_df["lmp"] = year_df["lmp"] * 0.80
     hi_df = year_df.copy(); hi_df["lmp"] = year_df["lmp"] * 1.20
     lo = run("", year_df=lo_df, lmp=lmp * 0.80)
@@ -161,8 +160,7 @@ def run_tornado(
     # baseline_plc_reduction_value ≈ (807 - 59) × $98.70 = $73,875 (from main run)
     # miss-1 reduces this by ≈ 1/5 × (1 - 0.2) = 16% → $11,820 loss.
     # best-case = baseline_value (cannot know MORE than 5 true peaks)
-    plc_reduction_value_est = 73875.0  # computed once from baseline run, see attribution
-    plc_loss_from_miss1 = plc_reduction_value_est * (1.0/5.0) * (1.0 - 0.2)
+    plc_loss_from_miss1 = plc_reduction_value * (1.0/5.0) * (1.0 - 0.2)
     lo = baseline_value - plc_loss_from_miss1
     hi = baseline_value
     rows.append({"label": "PLC identification (miss 1 of 5 proxy)", "lo": lo, "hi": hi})
@@ -229,6 +227,7 @@ def run_monte_carlo(
     export_allowed: bool = False,
     export_rate: float = 0.0,
     rng_seed: int = 2025,
+    plc_reduction_value: float = 73875.0,   # actual $ reduction value from primary run; dynamic
 ) -> dict:
     """Monte Carlo sample joint uncertainty → P10/P50/P90 band on annual battery value."""
     rng = np.random.default_rng(rng_seed)
@@ -260,7 +259,7 @@ def run_monte_carlo(
             load_mape, solar_mape_v, lmp_mape_v, seed=100 + i,
         )
         # Apply PLC-miss haircut: each missed hour loses 1/5 × 80% of the PLC reduction value.
-        plc_haircut = misses * (1.0/5.0) * 0.8 * 73875.0
+        plc_haircut = misses * (1.0/5.0) * 0.8 * plc_reduction_value
         val -= plc_haircut
         vals.append(val)
     arr = np.array(vals)

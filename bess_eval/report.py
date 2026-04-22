@@ -84,16 +84,31 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 </table>
 
 <h2>5. Battery sizing — optimal block size</h2>
-<p>MEMOSA-controls dispatch was re-run for each available block size. We identify the "knee" as the largest block whose added-kWh still earns at least 70% of what the most productive block earned per added kWh. Beyond the knee, marginal returns fall off sharply.</p>
+<p>MEMOSA-controls dispatch was re-run for each available block size. We flag a "knee" only when the curve shows an <strong>extreme</strong> plateau — i.e., a single inter-block step where marginal $/added-kWh collapses by &gt;60% (ratio &lt;0.40). Gentle concave diminishing returns are NOT flagged as a knee; those situations correctly recommend the largest tested size.</p>
 <img src="data:image/png;base64,{{plot_sizing_b64}}" alt="sizing">
 <table>
-  <tr><th>Size</th><th class="num">Power (kW AC)</th><th class="num">Energy (kWh)</th><th class="num">Annual $ saved</th><th class="num">Marginal $/added kWh</th><th>Knee?</th></tr>
+  <tr><th>Size</th><th class="num">Power (kW AC)</th><th class="num">Energy (kWh)</th><th class="num">Annual $ saved</th><th class="num">Marginal $/added kWh</th><th>Recommendation</th></tr>
   {{sizing_rows}}
 </table>
 <div class="note" style="margin-top: 1em">
-  <strong>Recommended size (knee):</strong> {{knee_label}} &mdash; ${{knee_savings}}/yr.<br>
+  <strong>Plateau-based recommendation:</strong> {{knee_label}} &mdash; ${{knee_savings}}/yr.<br>
   <em>{{knee_rationale}}</em>
   {{knee_vs_primary_note}}
+</div>
+
+<h3>5a. Secondary sizing check — marginal capex payback</h3>
+<p>The plateau-based recommendation above ignores what each additional block <em>costs</em>. This secondary check answers: <strong>if each incremental block costs roughly <code>${{capex_central}}/kWh</code> of added capacity (typical 2025 utility-scale Li-ion 2-hour BESS), is each step still worth the incremental capex?</strong> We compute simple payback on the incremental investment alone and flag the largest block whose marginal payback stays within the target (<code>{{target_yr}}-yr</code>) threshold. Capex band shown: <code>${{capex_low}}-${{capex_high}}/kWh</code>.</p>
+<table>
+  <tr><th>Size</th><th class="num">Δ kWh</th><th class="num">Δ Savings/yr</th><th class="num">Δ Capex @ ${{capex_central}}/kWh</th><th class="num">Marg payback (yr)</th><th class="num">Band (yr)</th></tr>
+  {{payback_rows}}
+</table>
+<div class="note" style="margin-top: 1em">
+  <strong>Capex-based recommendation:</strong> {{payback_rec_label}} &mdash; incremental payback {{payback_rec_years}} yr.<br>
+  <em>{{payback_rationale}}</em>
+</div>
+
+<div class="caveat">
+  <strong>Capex assumption is an estimate, not a quote.</strong> Installed BESS pricing varies widely with procurement strategy, labor market, domestic content requirements, permitting, interconnection studies, and soft costs. The central ${{capex_central}}/kWh assumes marginal module+BoS pricing typical of 2-hour Li-ion systems at this scale; actual quotes range roughly ${{capex_low}}-${{capex_high}}/kWh. <strong>Plug in your real quote to get a firm answer.</strong> If you enter a specific capex and payback target into <code>sizing_economics</code> in the config, this section will update automatically.
 </div>
 
 <h2>6. Baseline vs With-Battery: monthly bill comparison</h2>
@@ -276,6 +291,8 @@ def build_report(
     dr_stack: dict = None,
     sizing_results: list = None,
     sizing_knee: dict = None,
+    payback_rec: dict = None,
+    capex_assumptions: dict = None,
 ) -> Path:
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -365,12 +382,20 @@ def build_report(
     sizing_rows = ""
     primary_label = f"{int(battery_cfg['power_kw'])}kW/{int(battery_cfg['energy_kwh'])}kWh"
     knee_label_str = sizing_knee.get("knee_label", "")
+    knee_was_found = sizing_knee.get("knee_found", False)
     for r in sorted(sizing_results, key=lambda x: x.energy_kwh):
-        is_knee = r.label == knee_label_str
+        is_rec = r.label == knee_label_str
         is_primary = r.label == primary_label
-        marker = "&#9733; knee" if is_knee else ("primary" if is_primary else "")
+        if is_rec and knee_was_found:
+            marker = "&#9733; recommended (pre-plateau)"
+        elif is_rec and not knee_was_found:
+            marker = "&#9733; recommended (largest tested — no plateau observed)"
+        elif is_primary:
+            marker = "primary"
+        else:
+            marker = ""
         sizing_rows += (
-            f'<tr style="{"background:#ecfdf5;font-weight:600;" if is_knee else ""}">'
+            f'<tr style="{"background:#ecfdf5;font-weight:600;" if is_rec else ""}">'
             f'<td>{r.label}</td>'
             f'<td class="num">{r.power_kw:,.0f}</td>'
             f'<td class="num">{r.energy_kwh:,.0f}</td>'
@@ -379,6 +404,29 @@ def build_report(
             f'<td>{marker}</td></tr>\n'
         )
     plot_sizing_b64 = plot_sizing(sizing_results, sizing_knee) if sizing_results else ""
+
+    # Payback rows
+    payback_rows = ""
+    payback_rec = payback_rec or {}
+    capex_assumptions = capex_assumptions or {"central": 350, "low": 250, "high": 500, "target_yr": 10}
+    rec_label = payback_rec.get("recommended_label")
+    for r in sorted(sizing_results, key=lambda x: x.energy_kwh):
+        is_rec = r.label == rec_label
+        pb_c = f"{r.marginal_payback_years:.1f}" if r.marginal_payback_years != float('inf') else "∞"
+        pb_lo = f"{r.marginal_payback_years_lo:.1f}" if r.marginal_payback_years_lo != float('inf') else "∞"
+        pb_hi = f"{r.marginal_payback_years_hi:.1f}" if r.marginal_payback_years_hi != float('inf') else "∞"
+        ok = r.marginal_payback_years <= capex_assumptions["target_yr"]
+        bg = "background:#ecfdf5;font-weight:600;" if is_rec else ("background:#fef3c7;" if not ok else "")
+        payback_rows += (
+            f'<tr style="{bg}">'
+            f'<td>{r.label}</td>'
+            f'<td class="num">{r.marginal_added_kwh:,.0f}</td>'
+            f'<td class="num">${_fmt_dollar(r.marginal_annual_savings)}</td>'
+            f'<td class="num">${_fmt_dollar(r.marginal_capex)}</td>'
+            f'<td class="num">{pb_c}</td>'
+            f'<td class="num">{pb_lo}–{pb_hi}</td>'
+            f'</tr>\n'
+        )
 
     # Knee-vs-primary side-by-side note
     knee_vs_primary_note = ""
@@ -400,20 +448,39 @@ def build_report(
                 f"${sizing_knee['best_marginal_per_kwh']:.2f}/added-kWh."
             )
     elif knee_label_str == primary_label:
-        knee_vs_primary_note = (
-            f"<br><br>The knee coincides with the previously-decided primary size "
-            f"({primary_label}), which is consistent with that earlier recommendation."
-        )
+        if knee_was_found:
+            knee_vs_primary_note = (
+                f"<br><br>The recommended pre-plateau size coincides with the previously-decided "
+                f"primary size ({primary_label}), which is consistent with that earlier recommendation."
+            )
+        else:
+            knee_vs_primary_note = (
+                f"<br><br>No extreme plateau was observed in the tested range. The recommendation "
+                f"falls back to the largest tested size, which happens to match the previously-decided "
+                f"primary size ({primary_label}). A larger block (if available) could earn additional value "
+                f"— within the tested range, marginal returns are still healthy (declining gently but not collapsing)."
+            )
 
     caveats = [
-        "Load data is hourly; ComEd bills demand on 30-minute intervals. This understates demand savings by ~2-3%.",
-        "Solar is synthesized from a pvlib clear-sky model + Midwest monthly climatological cloud fractions, calibrated to 2026 Jan-Apr meter data. Hour-to-hour cloud variability not captured.",
-        "PJM ComEd-zone LMPs are synthesized from published typical diurnal/seasonal shape, anchored to the Aug-Sep 2025 bill's observed period-average ($0.0327/kWh). No live ISO data available in this environment.",
-        "PJM 5CP hours are proxied from the 5 highest weekday 2-7pm site-load hours in Jun-Sep 2025, anchored to the 8/15/25 18:00 hour confirmed on the Aug-Sep supply bill.",
-        "MEMOSA controls dispatch is modeled using the 'noisy foresight' approximation: inputs degraded by realistic AR(1) forecast error (load MAPE 4%, solar 15%, LMP 10%), then an optimization solves over the noised inputs. Matches the 10-15% realistic-vs-perfect-foresight gap typical of production controllers.",
+        # Data
+        "Load data is hourly; ComEd bills demand on 30-minute intervals per the ratebook. This understates demand savings by ~2-3% (true 30-min peaks are slightly higher than hourly averages, and a battery could shave more of them).",
+        "Solar is synthesized from a pvlib clear-sky (Ineichen) model + Midwest monthly climatological cloud fractions, fitted to 2026 Jan-Apr METERED production (A-North + B-South columns, not the design-estimate column). Hour-to-hour cloud variability is NOT captured — each day receives a smooth clear-sky-shape envelope.",
+        "Winter-snow loss present in the Jan-Apr 2026 calibration data is absorbed into the fit scalar k. When k is applied to summer months (no snow), this likely UNDERSTATES summer solar by ~5-8%, which in turn slightly INFLATES the battery value (more grid import for the battery to shave).",
+        "Smoothed solar output (no cloud-driven hour-to-hour variability) probably OVERSTATES peak-shave effectiveness by ~2-5% on what would in reality be broadly-cloudy afternoons.",
+        "Tilt 20° / azimuth 180° are assumed (actual system geometry unknown); affects annual generation by ±3-5%.",
+        # PJM / LMP
+        "PJM ComEd-zone LMPs are synthesized from published typical diurnal/seasonal shapes, anchored to the Aug-Sep 2025 supply bill's observed period-average ($0.0327/kWh). No live ISO data available. Real 2025 LMP spikes (system-stress price events) are NOT captured; these would boost arbitrage value if present.",
+        "PJM 5CP hours are proxied from the 5 highest weekday 14:00-19:00 site-load hours in Jun-Sep 2025, anchored to the 8/15/25 18:00 hour confirmed on the Aug-Sep supply bill. Each non-anchor hour has an estimated 20% probability of being misaligned with the true PJM system peak — captured in the Monte Carlo.",
+        "NSPL (transmission tag, 1CP) proxy uses the single highest weekday 2-7pm site-load hour, also anchored to 8/15/25 18:00.",
+        # Controls
+        "MEMOSA controls dispatch is approximated by the 'noisy foresight' method: inputs degraded by realistic AR(1) forecast error (load MAPE 4%, solar 15%, LMP 10%), then a perfect-foresight LP solves over the noised inputs. The reported point estimate is the median of 3 random-seed realizations (stdev across seeds shown in console). True rolling re-optimization would likely recover an additional 5-10% of the PF-to-MPC gap, so the reported figure is MILDLY CONSERVATIVE.",
+        "No battery cycling-cost term in the objective. The optimizer cycles opportunistically when it is economic — real deployments often add a $0.02-0.04/kWh-cycled penalty to prolong life, which would REDUCE dispatch aggressiveness and savings by ~2-5%.",
+        "Monthly LP boundaries chain SOC with a 50% mid-range terminal hint but don't coordinate across months globally. Possible edge-case suboptimality if a month's peak day falls near month-boundary. Small effect (<2%).",
+        # Billing / attribution
         "Battery is modeled as installed at the PCC upstream of both MDP meters, with battery flow allocated proportionally to each meter's load share for reporting billed demand. Real-world wiring may differ.",
         "ComEd DG net metering caps at 2 MW non-residential; the ~4 MW PV system is not eligible, so battery does not export to grid (export compensation = $0).",
-        "Franchise and municipal tax rates back-solved from two 2025 bills; monthly-interpolated schedules approximate DSPR reconciliation drift.",
+        "Franchise and municipal tax rates back-solved from two 2025 bills; monthly-interpolated schedules approximate DSPR reconciliation drift. IL Excise Tax uses effective (not marginal) rate for kWh deltas — overstates tax savings from battery by ~$50/yr on round-trip losses.",
+        "TEC pass-through formula uses NSPL × $0.00903/kW-day × days — blended effective rate derived from the Aug-Sep 2025 bill's mid-period rate change (19 days at $0.00893, 11 days at $0.00922).",
     ]
     caveat_list = "".join(f"<li>{c}</li>" for c in caveats)
 
@@ -471,6 +538,14 @@ def build_report(
         "{{knee_savings}}":     _fmt_dollar(sizing_knee.get("knee_annual_savings", 0)),
         "{{knee_rationale}}":   sizing_knee.get("rationale", ""),
         "{{knee_vs_primary_note}}": knee_vs_primary_note,
+        "{{payback_rows}}":     payback_rows,
+        "{{capex_central}}":    str(capex_assumptions["central"]),
+        "{{capex_low}}":        str(capex_assumptions["low"]),
+        "{{capex_high}}":       str(capex_assumptions["high"]),
+        "{{target_yr}}":        str(capex_assumptions["target_yr"]),
+        "{{payback_rec_label}}": rec_label or "none",
+        "{{payback_rec_years}}": f"{payback_rec.get('recommended_marginal_payback_yr', 0):.1f}" if payback_rec.get("recommended_marginal_payback_yr") is not None else "n/a",
+        "{{payback_rationale}}": payback_rec.get("rationale", ""),
         "{{caveat_list}}":    caveat_list,
         "{{methodology}}":    methodology,
     }
@@ -502,6 +577,8 @@ def build_report(
         "sizing": {
             "sweep_results": [r.__dict__ for r in (sizing_results or [])],
             "knee": sizing_knee,
+            "capex_based_recommendation": payback_rec,
+            "capex_assumptions": capex_assumptions,
         },
     }
     json_path.write_text(json.dumps(payload, indent=2, default=str))

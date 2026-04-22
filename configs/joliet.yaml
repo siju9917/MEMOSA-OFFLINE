@@ -126,7 +126,10 @@ supply_tariff:
     # Transmission: $46.025/kW-yr × NSPL kW × days_in_month / 365
     nspl_kw: 1299.79
     transmission_rate_per_kw_yr: 46.025
-    tec_pass_through_rates: [0.00893, 0.00922]   # applied to NSPL kW
+    # TEC is billed NSPL × $/kW-day × days. The Aug-Sep bill had a mid-period rate
+    # change (19 days @ $0.00893, 11 days @ $0.00922, both × NSPL = $220.54 + $131.82).
+    # Blended effective rate for annualization: (0.00893*19 + 0.00922*11)/30 = $0.00903/kW-day.
+    tec_effective_rate_per_kw_day: 0.00903
   # Secondary: Energy Harbor block contract (Feb bill) - bookend
   block:
     block1_kwh_per_month: 720000
@@ -162,6 +165,18 @@ battery_sizes_to_sweep:
   - {power_kw: 1000, energy_kwh: 2028, label: "1000kW/2028kWh"}
   - {power_kw: 1250, energy_kwh: 2535, label: "1250kW/2535kWh"}
   - {power_kw: 1500, energy_kwh: 3042, label: "1500kW/3042kWh"}
+
+# Secondary sizing check — is each incremental block 'worth it' given typical prices?
+# 2-hour Li-ion utility-scale BESS in the 500-3000 kWh range typically costs
+# $300-400 per kWh of added capacity on the MARGINAL side (BoS + module, after first-block
+# fixed costs are sunk). Central value: $350/kWh. Simple payback target: 10 years is a
+# common C&I underwriting hurdle; 7 years is aggressive, 12 is conservative.
+sizing_economics:
+  marginal_capex_per_kwh_added: 350      # $/kWh of added capacity for each block
+  target_simple_payback_years: 10        # worth-it threshold
+  # Range for a sensitivity band on the capex assumption itself
+  marginal_capex_low:  250   # optimistic (bulk/Chinese modules)
+  marginal_capex_high: 500   # conservative (turnkey installed with all soft costs)
 
 value_streams:
   dfc_reduction: true

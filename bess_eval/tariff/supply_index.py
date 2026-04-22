@@ -58,7 +58,12 @@ class IndexSupply:
         self.capacity_rate = cfg["capacity_rate_per_kw_day"]
         self.nspl_kw = cfg["nspl_kw"]
         self.transmission_rate_yr = cfg["transmission_rate_per_kw_yr"]
-        self.tec_rates = cfg["tec_pass_through_rates"]
+        # TEC billed as NSPL × $/kW-day × days (was incorrectly modeled as × 12 monthly)
+        self.tec_rate_per_kw_day = cfg.get(
+            "tec_effective_rate_per_kw_day",
+            # Back-compat fallback: if old list of rates is still present
+            sum(cfg.get("tec_pass_through_rates", [0.0])) / 30.0,
+        )
 
     def compute_bill(
         self,
@@ -92,7 +97,7 @@ class IndexSupply:
         nspl = nspl_kw if nspl_kw is not None else self.nspl_kw
         transmission_charge = nspl * self.transmission_rate_yr * days / 365.0
 
-        tec = nspl * sum(self.tec_rates) * (days / 30.0)
+        tec = nspl * self.tec_rate_per_kw_day * days
 
         return IndexSupplyBill(
             period_start=period_df.index.min(),
@@ -109,7 +114,7 @@ class IndexSupply:
         """Annual $ cost of the PLC + NSPL tags (battery target for reduction)."""
         cap = plc_kw * self.capacity_rate * 365
         tx = nspl_kw * self.transmission_rate_yr
-        tec = nspl_kw * sum(self.tec_rates) * 12
+        tec = nspl_kw * self.tec_rate_per_kw_day * 365
         return {
             "capacity_annual": cap,
             "transmission_annual": tx,

@@ -41,23 +41,23 @@
   },
   "solar_annual_kwh": 4901284.222631108,
   "comparison_mpc": {
-    "baseline_total_annual": 1120573.0236888279,
-    "with_battery_total_annual": 908819.5257713017,
-    "battery_value_annual": 211753.49791752617,
+    "baseline_total_annual": 1126096.4671520651,
+    "with_battery_total_annual": 914051.9251191572,
+    "battery_value_annual": 212044.54203290795,
     "streams": {
-      "dfc_demand_reduction": 54876.744374178554,
-      "other_delivery_riders_taxes": -871.0872164159373,
-      "energy_arbitrage": 14509.07585865719,
-      "plc_capacity_tag_reduction": 73874.56490110632,
-      "nspl_transmission_tag_reduction": 69364.2
+      "dfc_demand_reduction": 63291.47092610427,
+      "other_delivery_riders_taxes": -775.4745956031693,
+      "energy_arbitrage": 14773.77963357279,
+      "plc_capacity_tag_reduction": 60773.34106883392,
+      "nspl_transmission_tag_reduction": 73981.425
     },
     "baseline_detail": {
       "scenario": "Baseline (no battery)",
-      "total": 1120573.0236888279,
+      "total": 1126096.4671520651,
       "delivery": 556016.3226713907,
-      "supply": 564556.7010174372,
+      "supply": 570080.1444806743,
       "capacity_tag": 79686.5013265452,
-      "transmission_tag": 82978.24712303869,
+      "transmission_tag": 88501.69058627581,
       "energy_cost": 401891.95256785327,
       "other_supply": 0.0,
       "per_stream": {
@@ -67,53 +67,55 @@
         "supply_fixed_adder": 115067.13965894225,
         "capacity_tag": 79686.5013265452,
         "transmission_tag": 82587.42601740932,
-        "tec_pass_through": 390.8211056293699,
+        "tec_pass_through": 5914.264568866491,
         "plc_kw_post": 807.3038557725185,
         "nspl_kw_post": 1794.4036071137277,
         "total_kwh": 10527643.15269371
       }
     },
     "with_battery_detail": {
-      "scenario": "MEMOSA controls",
-      "total": 908819.5257713017,
-      "delivery": 502010.6655136281,
-      "supply": 406808.8602576736,
-      "capacity_tag": 5811.936425438874,
-      "transmission_tag": 13614.047123038688,
-      "energy_cost": 387382.8767091961,
+      "scenario": "MEMOSA seed=7",
+      "total": 914051.9251191572,
+      "delivery": 493500.3263408896,
+      "supply": 420551.59877826757,
+      "capacity_tag": 18913.16025771128,
+      "transmission_tag": 14520.26558627581,
+      "energy_cost": 387118.1729342805,
       "other_supply": 0.0,
       "per_stream": {
-        "delivery_total": 502010.6655136281,
-        "supply_energy": 257146.14510307126,
-        "supply_losses": 14583.946874525309,
-        "supply_fixed_adder": 115652.78473159949,
-        "capacity_tag": 5811.936425438874,
+        "delivery_total": 493500.3263408896,
+        "supply_energy": 256949.69548939084,
+        "supply_losses": 14576.303753808574,
+        "supply_fixed_adder": 115592.17369108109,
+        "capacity_tag": 18913.16025771128,
         "transmission_tag": 13549.926017409318,
-        "tec_pass_through": 64.1211056293699,
-        "plc_kw_post": 58.880721422745545,
+        "tec_pass_through": 970.3395688664908,
+        "plc_kw_post": 191.60920540763624,
         "nspl_kw_post": 294.40360711372773,
-        "total_kwh": 10581224.586605625
+        "total_kwh": 10575679.203209614
       }
-    }
+    },
+    "battery_value_annual_seed_mean": 210823.41393831116,
+    "battery_value_annual_seed_stdev": 6248.020932921292
   },
   "comparison_pf": {
-    "baseline_total_annual": 1120573.0236888279,
-    "with_battery_total_annual": 866183.5374033634,
-    "battery_value_annual": 254389.4862854645,
+    "baseline_total_annual": 1126096.4671520651,
+    "with_battery_total_annual": 867089.7558666004,
+    "battery_value_annual": 259006.7112854647,
     "streams": {
       "dfc_demand_reduction": 85432.29045516838,
       "other_delivery_riders_taxes": 2211.804480592924,
       "energy_arbitrage": 23506.626448596828,
       "plc_capacity_tag_reduction": 73874.56490110632,
-      "nspl_transmission_tag_reduction": 69364.2
+      "nspl_transmission_tag_reduction": 73981.425
     },
     "baseline_detail": {
       "scenario": "Baseline (no battery)",
-      "total": 1120573.0236888279,
+      "total": 1126096.4671520651,
       "delivery": 556016.3226713907,
-      "supply": 564556.7010174372,
+      "supply": 570080.1444806743,
       "capacity_tag": 79686.5013265452,
-      "transmission_tag": 82978.24712303869,
+      "transmission_tag": 88501.69058627581,
       "energy_cost": 401891.95256785327,
       "other_supply": 0.0,
       "per_stream": {
@@ -123,7 +125,7 @@
         "supply_fixed_adder": 115067.13965894225,
         "capacity_tag": 79686.5013265452,
         "transmission_tag": 82587.42601740932,
-        "tec_pass_through": 390.8211056293699,
+        "tec_pass_through": 5914.264568866491,
         "plc_kw_post": 807.3038557725185,
         "nspl_kw_post": 1794.4036071137277,
         "total_kwh": 10527643.15269371
@@ -131,11 +133,11 @@
     },
     "with_battery_detail": {
       "scenario": "Perfect foresight",
-      "total": 866183.5374033634,
+      "total": 867089.7558666004,
       "delivery": 468372.2277356294,
-      "supply": 397811.30966773396,
+      "supply": 398717.52813097107,
       "capacity_tag": 5811.936425438874,
-      "transmission_tag": 13614.047123038688,
+      "transmission_tag": 14520.26558627581,
       "energy_cost": 378385.32611925644,
       "other_supply": 0.0,
       "per_stream": {
@@ -145,7 +147,7 @@
         "supply_fixed_adder": 113684.79836789201,
         "capacity_tag": 5811.936425438874,
         "transmission_tag": 13549.926017409318,
-        "tec_pass_through": 64.1211056293699,
+        "tec_pass_through": 970.3395688664908,
         "plc_kw_post": 58.880721422745545,
         "nspl_kw_post": 294.40360711372773,
         "total_kwh": 10401170.939422874
@@ -153,9 +155,9 @@
     }
   },
   "comparison_rb": {
-    "baseline_total_annual": 1120573.0236888279,
-    "with_battery_total_annual": 1098809.7842674828,
-    "battery_value_annual": 21763.23942134506,
+    "baseline_total_annual": 1126096.4671520651,
+    "with_battery_total_annual": 1104333.2277307198,
+    "battery_value_annual": 21763.239421345294,
     "streams": {
       "dfc_demand_reduction": 15863.041831671988,
       "other_delivery_riders_taxes": 1635.6525981864834,
@@ -165,11 +167,11 @@
     },
     "baseline_detail": {
       "scenario": "Baseline (no battery)",
-      "total": 1120573.0236888279,
+      "total": 1126096.4671520651,
       "delivery": 556016.3226713907,
-      "supply": 564556.7010174372,
+      "supply": 570080.1444806743,
       "capacity_tag": 79686.5013265452,
-      "transmission_tag": 82978.24712303869,
+      "transmission_tag": 88501.69058627581,
       "energy_cost": 401891.95256785327,
       "other_supply": 0.0,
       "per_stream": {
@@ -179,7 +181,7 @@
         "supply_fixed_adder": 115067.13965894225,
         "capacity_tag": 79686.5013265452,
         "transmission_tag": 82587.42601740932,
-        "tec_pass_through": 390.8211056293699,
+        "tec_pass_through": 5914.264568866491,
         "plc_kw_post": 807.3038557725185,
         "nspl_kw_post": 1794.4036071137277,
         "total_kwh": 10527643.15269371
@@ -187,11 +189,11 @@
     },
     "with_battery_detail": {
       "scenario": "Rule-based",
-      "total": 1098809.7842674828,
+      "total": 1104333.2277307198,
       "delivery": 538517.6282415322,
-      "supply": 560292.1560259506,
+      "supply": 565815.5994891877,
       "capacity_tag": 79686.5013265452,
-      "transmission_tag": 82978.24712303869,
+      "transmission_tag": 88501.69058627581,
       "energy_cost": 397627.4075763667,
       "other_supply": 0.0,
       "per_stream": {
@@ -201,7 +203,7 @@
         "supply_fixed_adder": 114041.77251173605,
         "capacity_tag": 79686.5013265452,
         "transmission_tag": 82587.42601740932,
-        "tec_pass_through": 390.8211056293699,
+        "tec_pass_through": 5914.264568866491,
         "plc_kw_post": 807.3038557725185,
         "nspl_kw_post": 1794.4036071137277,
         "total_kwh": 10433830.970881615
@@ -256,8 +258,8 @@
   "tag_costs": {
     "capacity_annual": 140595.81061319998,
     "transmission_annual": 59822.834749999995,
-    "tec_annual": 283.09426199999996,
-    "total_tag_annual": 200701.7396252,
+    "tec_annual": 4284.042850499999,
+    "total_tag_annual": 204702.6882137,
     "capacity_per_kw_yr": 98.70695,
     "transmission_per_kw_yr": 46.025
   },
@@ -265,89 +267,89 @@
     "tornado": [
       {
         "label": "MPC forecast skill (\u00b1typical)",
-        "lo": 190295.7663227101,
-        "hi": 229025.2524123015,
-        "delta_lo": -21457.731594816083,
-        "delta_hi": 17271.75449477532,
+        "lo": 194912.99132271018,
+        "hi": 233642.47741230158,
+        "delta_lo": -17131.55071019777,
+        "delta_hi": 21597.93537939363,
         "span": 38729.4860895914
       },
       {
         "label": "LMP diurnal intensity (\u00b125%)",
-        "lo": 206743.74242407153,
-        "hi": 219495.9584727832,
-        "delta_lo": -5009.755493454635,
-        "delta_hi": 7742.460555257043,
+        "lo": 211360.96742407163,
+        "hi": 224113.1834727833,
+        "delta_lo": -683.574608836323,
+        "delta_hi": 12068.641439875355,
         "span": 12752.216048711678
       },
       {
         "label": "PLC identification (miss 1 of 5 proxy)",
-        "lo": 199933.49791752617,
-        "hi": 211753.49791752617,
-        "delta_lo": -11820.0,
+        "lo": 202320.80746189452,
+        "hi": 212044.54203290795,
+        "delta_lo": -9723.734571013425,
         "delta_hi": 0.0,
-        "span": 11820.0
+        "span": 9723.734571013425
       },
       {
         "label": "Solar annual total (\u00b115%)",
-        "lo": 219284.48218226153,
-        "hi": 212144.21073942014,
-        "delta_lo": 7530.984264735365,
-        "delta_hi": 390.71282189397607,
-        "span": 7140.271442841389
-      },
-      {
-        "label": "LMP level (\u00b120%)",
-        "lo": 208734.55373126338,
-        "hi": 214772.44210378896,
-        "delta_lo": -3018.9441862627864,
-        "delta_hi": 3018.9441862627864,
-        "span": 6037.888372525573
+        "lo": 223901.70718226128,
+        "hi": 216761.43573942012,
+        "delta_lo": 11857.165149353328,
+        "delta_hi": 4716.893706512172,
+        "span": 7140.271442841156
       },
       {
         "label": "15-min billing interval (hourly understates)",
-        "lo": 211753.49791752617,
-        "hi": 214313.0949439715,
+        "lo": 212044.54203290795,
+        "hi": 218930.31994397123,
         "delta_lo": 0.0,
-        "delta_hi": 2559.597026445321,
-        "span": 2559.597026445321
+        "delta_hi": 6885.777911063284,
+        "span": 6885.777911063284
+      },
+      {
+        "label": "LMP level (\u00b120%)",
+        "lo": 213351.77873126324,
+        "hi": 219389.66710378905,
+        "delta_lo": 1307.236698355293,
+        "delta_hi": 7345.1250708810985,
+        "span": 6037.888372525806
       },
       {
         "label": "Battery RTE (\u00b12 pp)",
-        "lo": 211578.20029261638,
-        "hi": 213875.70959610282,
-        "delta_lo": -175.29762490978464,
-        "delta_hi": 2122.2116785766557,
-        "span": 2297.5093034864403
+        "lo": 216195.42529261648,
+        "hi": 218492.93459610303,
+        "delta_lo": 4150.8832597085275,
+        "delta_hi": 6448.392563195084,
+        "span": 2297.5093034865567
       }
     ],
     "monte_carlo": {
       "samples": [
-        208794.4328479038,
-        184758.4510223798,
-        202838.9277321801,
-        189004.23006441665,
-        184507.87892684876,
-        171510.62243465066,
-        197577.68687276146,
-        197112.93859893107,
-        199370.84711172082,
-        203918.64464456658,
-        174088.42582765466,
-        198023.4625645224,
-        190703.56198213587,
-        182604.28575723385,
-        201190.04353742336,
-        195358.99370220792,
-        199499.11354004336,
-        184169.5664893894,
-        198236.3609365956,
-        219259.8887057735
+        217604.18870587728,
+        189375.67602237978,
+        209552.41816116677,
+        193621.45506441686,
+        191221.36935583496,
+        180320.3782926238,
+        204291.17730174813,
+        201730.16359893116,
+        206084.3375407075,
+        208535.86964456656,
+        182898.18168562767,
+        204736.95299350884,
+        197417.05241112242,
+        193510.30704419367,
+        205807.26853742334,
+        202072.48413119448,
+        206212.60396903026,
+        188786.79148938926,
+        204949.85136558238,
+        223877.1137057735
       ],
-      "p10": 181752.69976427592,
-      "p50": 197345.31273584627,
-      "p90": 204406.2234649003,
-      "mean": 194126.41816496695,
-      "std": 11274.866394763447
+      "p10": 188197.9305090131,
+      "p50": 203181.8307164713,
+      "p90": 210357.59521563785,
+      "mean": 200630.28205105494,
+      "std": 10730.985959518266
     }
   },
   "sizing": {
@@ -356,60 +358,119 @@
         "label": "250kW/507kWh",
         "power_kw": 250,
         "energy_kwh": 507,
-        "annual_savings": 46635.1240777357,
-        "marginal_savings_per_added_kwh": 91.9824932499718,
+        "annual_savings": 47404.661577735795,
+        "marginal_savings_per_added_kwh": 93.50031869375897,
+        "marginal_annual_savings": 47404.661577735795,
+        "marginal_added_kwh": 507.0,
+        "marginal_capex": 177450.0,
+        "marginal_payback_years": 3.743302749013647,
+        "marginal_payback_years_lo": 2.6737876778668905,
+        "marginal_payback_years_hi": 5.347575355733781,
         "included_in_knee": true
       },
       {
         "label": "500kW/1014kWh",
         "power_kw": 500,
         "energy_kwh": 1014,
-        "annual_savings": 83284.37116312608,
-        "marginal_savings_per_added_kwh": 72.28648340313684,
+        "annual_savings": 84823.44616312627,
+        "marginal_savings_per_added_kwh": 73.80430884692402,
+        "marginal_annual_savings": 37418.78458539047,
+        "marginal_added_kwh": 507,
+        "marginal_capex": 177450,
+        "marginal_payback_years": 4.742270545828534,
+        "marginal_payback_years_lo": 3.3873361041632384,
+        "marginal_payback_years_hi": 6.774672208326477,
         "included_in_knee": true
       },
       {
         "label": "750kW/1521kWh",
         "power_kw": 750,
         "energy_kwh": 1521,
-        "annual_savings": 118674.26343512465,
-        "marginal_savings_per_added_kwh": 69.80254885995774,
+        "annual_savings": 120982.87593512482,
+        "marginal_savings_per_added_kwh": 71.32037430374467,
+        "marginal_annual_savings": 36159.42977199855,
+        "marginal_added_kwh": 507,
+        "marginal_capex": 177450,
+        "marginal_payback_years": 4.907433582855205,
+        "marginal_payback_years_lo": 3.505309702039432,
+        "marginal_payback_years_hi": 7.010619404078864,
         "included_in_knee": true
       },
       {
         "label": "1000kW/2028kWh",
         "power_kw": 1000,
         "energy_kwh": 2028,
-        "annual_savings": 154008.50831615878,
-        "marginal_savings_per_added_kwh": 69.69279069237501,
+        "annual_savings": 157086.65831615892,
+        "marginal_savings_per_added_kwh": 71.21061613616195,
+        "marginal_annual_savings": 36103.78238103411,
+        "marginal_added_kwh": 507,
+        "marginal_capex": 177450,
+        "marginal_payback_years": 4.914997496030148,
+        "marginal_payback_years_lo": 3.5107124971643913,
+        "marginal_payback_years_hi": 7.0214249943287825,
         "included_in_knee": true
       },
       {
         "label": "1250kW/2535kWh",
         "power_kw": 1250,
         "energy_kwh": 2535,
-        "annual_savings": 187644.36668082932,
-        "marginal_savings_per_added_kwh": 66.342915906648,
+        "annual_savings": 191492.05418082955,
+        "marginal_savings_per_added_kwh": 67.86074135043516,
+        "marginal_annual_savings": 34405.39586467063,
+        "marginal_added_kwh": 507,
+        "marginal_capex": 177450,
+        "marginal_payback_years": 5.157621225983785,
+        "marginal_payback_years_lo": 3.6840151614169896,
+        "marginal_payback_years_hi": 7.368030322833979,
         "included_in_knee": true
       },
       {
         "label": "1500kW/3042kWh",
         "power_kw": 1500,
         "energy_kwh": 3042,
-        "annual_savings": 211753.49791752617,
-        "marginal_savings_per_added_kwh": 47.55252709407662,
-        "included_in_knee": false
+        "annual_savings": 216370.72291752626,
+        "marginal_savings_per_added_kwh": 49.07035253786333,
+        "marginal_annual_savings": 24878.66873669671,
+        "marginal_added_kwh": 507,
+        "marginal_capex": 177450,
+        "marginal_payback_years": 7.132616374213643,
+        "marginal_payback_years_lo": 5.094725981581174,
+        "marginal_payback_years_hi": 10.189451963162348,
+        "included_in_knee": true
       }
     ],
     "knee": {
-      "knee_label": "1250kW/2535kWh",
-      "knee_power_kw": 1250,
-      "knee_energy_kwh": 2535,
-      "knee_annual_savings": 187644.36668082932,
-      "best_marginal_per_kwh": 91.9824932499718,
-      "knee_marginal_per_kwh": 66.342915906648,
-      "threshold_ratio": 0.7,
-      "rationale": "Largest size whose added-kWh returned at least 70% of the best block's $91.98/added-kWh rate. Beyond this size, each additional kWh earns less than $64.39/yr, indicating diminishing returns."
+      "knee_label": "1500kW/3042kWh",
+      "knee_power_kw": 1500,
+      "knee_energy_kwh": 3042,
+      "knee_annual_savings": 216370.72291752626,
+      "best_marginal_per_kwh": 93.50031869375897,
+      "knee_marginal_per_kwh": 49.07035253786333,
+      "extreme_drop_ratio": 0.4,
+      "drop_location": null,
+      "deepest_drop": {
+        "from_size": "1250kW/2535kWh",
+        "to_size": "1500kW/3042kWh",
+        "ratio": 0.7231036909022607,
+        "drop_pct": 27.689630909773932,
+        "marginal_before": 67.86074135043516,
+        "marginal_after": 49.07035253786333
+      },
+      "knee_found": false,
+      "rationale": "NO EXTREME KNEE DETECTED in the tested range. Deepest step-down observed is only 28% (1250kW/2535kWh \u2192 1500kW/3042kWh: $67.86 \u2192 $49.07/added-kWh), which does not meet the 60% extreme-drop threshold. Marginal returns are still meaningful at the largest tested block (1500kW/3042kWh, $49.07/added-kWh). The recommendation is the LARGEST tested block \u2014 bigger is simply better within the range you gave, and the true plateau may lie at a size you didn't test. Consider evaluating larger blocks if capex permits."
+    },
+    "capex_based_recommendation": {
+      "recommended_label": "1500kW/3042kWh",
+      "recommended_savings": 216370.72291752626,
+      "recommended_marginal_payback_yr": 7.132616374213643,
+      "target_payback_years": 10,
+      "rationale": "Largest block whose INCREMENTAL capex ($177,450) pays back within 10 yr on its marginal annual savings ($24,879/yr \u2192 7.1 yr payback on that incremental block alone)."
+    },
+    "capex_assumptions": {
+      "central": 350,
+      "low": 250,
+      "high": 500,
+      "target_yr": 10
     }
   }
 }

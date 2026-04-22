@@ -128,7 +128,7 @@ def annual_cost_from_dispatch(
     fixed_adder = total_kwh * supply_tariff.fixed_adder
     capacity = plc_kw_post * supply_tariff.capacity_rate * 365
     transmission = nspl_kw_post * supply_tariff.transmission_rate_yr
-    tec = nspl_kw_post * sum(supply_tariff.tec_rates) * 12
+    tec = nspl_kw_post * supply_tariff.tec_rate_per_kw_day * 365
 
     supply_total = energy + losses + fixed_adder + capacity + transmission + tec
 
