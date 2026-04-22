@@ -99,13 +99,17 @@ class ComEdVLLDelivery:
         self.customer_charge = cfg["customer_charge_monthly"]
         self.metering_charge = cfg["metering_charge_monthly"]
         self.meter_lease = cfg["meter_lease_monthly"]
+        # Optional per-site: some sites have nonstandard facilities (e.g. customer-owned
+        # transformer or extended service drop). Joliet has $0; Bedford has $70.97/mo.
+        self.nonstandard_facilities = cfg.get("nonstandard_facilities_charge_monthly", 0.0)
         self.dfc_per_kw_monthly = cfg["dfc_per_kw_monthly"]
         self.iedt = cfg["iedt_per_kwh"]
         self.riders = cfg["riders_per_kwh"]
         self.franchise_monthly = cfg["franchise_effective_rate_monthly"]
         self.franchise_basis = cfg.get("franchise_basis", "dfc_iedt")
         self.il_excise_eff = cfg["il_excise_effective_per_kwh"]
-        self.municipal_per_kwh = cfg["municipal_tax_per_kwh"]
+        # Municipal tax — flat $/kWh. Joliet = $0.00185; Bedford Park = $0 (no local tax).
+        self.municipal_per_kwh = cfg.get("municipal_tax_per_kwh", 0.0)
 
     def dfc_rate(self, month: int) -> float:
         return self.dfc_per_kw_monthly[month]
@@ -185,6 +189,8 @@ class ComEdVLLDelivery:
                      f"{total_kwh:,.0f} kWh @ ${self.iedt}/kWh")
         )
         bill.lines.append(BillLine("Meter Lease", self.meter_lease, ""))
+        if self.nonstandard_facilities:
+            bill.lines.append(BillLine("Nonstandard Facilities Charge", self.nonstandard_facilities, ""))
         delivery_subtotal = sum(l.amount for l in bill.lines)
 
         rider_order = [

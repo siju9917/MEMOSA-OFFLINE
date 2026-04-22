@@ -19,6 +19,10 @@ from .battery import BatterySpec
 from .tariff.comed_delivery import ComEdVLLDelivery
 from .tariff.supply_index import IndexSupply
 from .sensitivity import _compute_value
+from .battery import BatterySpec
+from .dispatch.perfect_foresight import perfect_foresight_dispatch
+from .attribution import annual_cost_from_dispatch, compare_scenarios
+import numpy as np
 
 
 @dataclass
@@ -57,25 +61,53 @@ def run_sweep(
     lmp: pd.Series,
     battery_cfg_template: dict,
     delivery: ComEdVLLDelivery,
-    supply: IndexSupply,
+    supply,
     dfc_monthly: dict,
     plc_hours: list,
     nspl_hour: pd.Timestamp,
     mpc_cfg: dict,
     export_allowed: bool = False,
     export_rate: float = 0.0,
+    mpc_gap_factor: float = 0.83,   # realistic-vs-PF ratio for final scaling (set externally)
 ) -> list[SizingResult]:
-    """Run MEMOSA-controls dispatch once per size and return annual savings."""
+    """Run perfect-foresight dispatch per size (deterministic + monotonic) and return
+    annual savings. Using PF instead of noisy-foresight here because:
+      - PF is deterministic: same inputs → same output, no seed-variance cross-size
+      - PF is monotonic in battery size (larger battery always extracts at least the
+        same value), which is the physically correct behavior for a sizing comparison
+      - For sizing decisions, relative values matter — the MPC-vs-PF gap affects all
+        sizes roughly uniformly (via mpc_gap_factor) and cancels in knee/payback detection
+
+    Absolute values here are PF-upper-bound; the report's main MEMOSA number stays on
+    the noisy-foresight estimate for that particular battery."""
     sorted_sizes = sorted(sizes, key=lambda s: s[1])  # by energy
     results: list[SizingResult] = []
     for power_kw, energy_kwh, label in sorted_sizes:
         battery = _make_battery(battery_cfg_template, power_kw, energy_kwh)
-        savings = _compute_value(
-            year_df, lmp, battery, delivery, supply, dfc_monthly,
-            plc_hours, nspl_hour, mpc_cfg,
-            export_allowed=export_allowed, export_rate=export_rate,
-            load_mape=0.04, solar_mape=0.15, lmp_mape=0.10, seed=42,
+        # PF baseline — no-battery scenario
+        bl = year_df.copy()
+        bl["p_chg"] = 0.0
+        bl["p_dis"] = 0.0
+        bl["soc_kwh"] = battery.soc_init_kwh
+        bl["grid_import"] = np.maximum(0.0, bl["load_kw"] - bl["solar_kw"])
+        bl["grid_export"] = 0.0
+        bl_res = annual_cost_from_dispatch(
+            bl, ["mdp1", "mdp2"], delivery, supply, lmp, plc_hours, [nspl_hour], "baseline"
         )
+        # PF with battery
+        pf_out = perfect_foresight_dispatch(
+            year_df, battery, dfc_monthly, plc_hours, [nspl_hour], mpc_cfg,
+            export_allowed=export_allowed, export_rate_per_kwh=export_rate,
+        )
+        pf_df = pf_out.df.join(year_df[["mdp1", "mdp2"]])
+        pf_res = annual_cost_from_dispatch(
+            pf_df, ["mdp1", "mdp2"], delivery, supply, lmp, plc_hours, [nspl_hour], "pf"
+        )
+        comp = compare_scenarios(bl_res, pf_res)
+        pf_savings = comp["battery_value_annual"]
+        # Scale down to estimated realistic MEMOSA value via the PF→MPC gap observed
+        # at the primary size (so sizing recommendations reflect realistic operations).
+        savings = pf_savings * mpc_gap_factor
         results.append(SizingResult(
             label=label, power_kw=power_kw, energy_kwh=energy_kwh,
             annual_savings=savings, marginal_savings_per_added_kwh=0.0,

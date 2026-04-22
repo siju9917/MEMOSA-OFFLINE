@@ -39,13 +39,16 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <p style="color:#6b7280">Generated {{generated_at}}</p>
 
 <div class="hero">
-  <div>Annual $ saved by battery — point estimate (MEMOSA controls)</div>
+  <div>Annual $ saved by battery — point estimate (MEMOSA controls, PF × gap-factor)</div>
   <div class="big">${{mpc_savings_fmt}}</div>
   <div style="color:#374151; margin-top: 0.6em; font-size: 1.1em">
     <strong>Confidence band (Monte Carlo, N=20 joint samples):</strong><br>
     P10 <strong>${{mc_p10_fmt}}</strong> &nbsp;|&nbsp; P50 <strong>${{mc_p50_fmt}}</strong> &nbsp;|&nbsp; P90 <strong>${{mc_p90_fmt}}</strong> &nbsp; (μ ${{mc_mean_fmt}} ± σ ${{mc_std_fmt}})
   </div>
-  <div style="color:#6b7280; margin-top: 0.5em">Perfect-foresight upper bound: ${{pf_savings_fmt}} &nbsp;|&nbsp; Rule-based floor: ${{rb_savings_fmt}}</div>
+  <div style="color:#6b7280; margin-top: 0.5em">
+    Perfect-foresight upper bound: ${{pf_savings_fmt}} &nbsp;|&nbsp; Rule-based floor: ${{rb_savings_fmt}}<br>
+    Realized-dispatch reference (5-seed mean): ${{seed_mean_fmt}} (stderr ${{seed_stderr_fmt}})
+  </div>
 </div>
 
 <h2>1. Site & data summary</h2>
@@ -512,10 +515,12 @@ def build_report(
         "{{annual_kwh}}": f"{data_summary['annual_kwh']:,.0f}",
         "{{peak_kw}}": f"{data_summary['peak_kw']:,.1f}",
         "{{solar_annual}}": f"{solar_annual_kwh:,.0f}",
-        "{{solar_cf}}": f"{solar_annual_kwh / (4000 * 8760) * 100:.1f}",
+        "{{solar_cf}}": f"{solar_annual_kwh / max(site_cfg.get('solar_ac_nameplate_kw', 4000) * 8760, 1) * 100:.1f}",
         "{{mpc_savings_fmt}}": _fmt_dollar(comparison_mpc["battery_value_annual"]),
         "{{pf_savings_fmt}}":  _fmt_dollar(comparison_pf["battery_value_annual"]),
         "{{rb_savings_fmt}}":  _fmt_dollar(comparison_rb["battery_value_annual"]),
+        "{{seed_mean_fmt}}":   _fmt_dollar(comparison_mpc.get("battery_value_annual_seed_mean", 0)),
+        "{{seed_stderr_fmt}}": _fmt_dollar(comparison_mpc.get("battery_value_annual_seed_stderr", 0)),
         "{{mc_p10_fmt}}": _fmt_dollar(mc["p10"]),
         "{{mc_p50_fmt}}": _fmt_dollar(mc["p50"]),
         "{{mc_p90_fmt}}": _fmt_dollar(mc["p90"]),

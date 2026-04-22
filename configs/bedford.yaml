@@ -1,0 +1,228 @@
+site:
+  name: Bedford
+  address: 6901 & 7035 W 65th St, Bedford Park, IL 60638
+  lat: 41.7647
+  lon: -87.7586
+  elevation_m: 190
+  tz: America/Chicago
+  utility: ComEd
+  iso: PJM
+  zone: COMED
+  solar_ac_nameplate_kw: 2000
+
+data:
+  load_csv: BedfordLoad.csv
+  solar_csv: BedfordSolar.csv
+  load_time_col: Time
+  load_kw_cols: ["Main Service 496: Demand (kW) [kW]", "Main Service 580: Demand (kW) [kW]"]
+  solar_time_col: "Site Time"
+  solar_production_cols:
+    - "METER - PRODUCTION - System A Kilowatt hours"
+    - "METER - PRODUCTION - System B Kilowatt hours"
+  evaluation_year: 2025
+  # Bedford's 2025 load data has solar OUTPUT embedded starting 2025-09-09.
+  # We reconstruct gross pre-solar load by adding measured solar back for those hours.
+  solar_embedded_in_load: true
+
+# Bedford's summer bill does not show a coincident-peak anchor; all 5 PLC hours are proxied.
+plc_anchor_hours: []
+nspl_anchor_hour: null
+
+delivery_tariff:
+  kind: comed_vll_secondary
+  # Same VLL-Secondary rate class as Joliet (1000kW-10MW)
+  customer_charge_monthly: 1005.03
+  metering_charge_monthly: 14.10
+  meter_lease_monthly: 1.00          # Bedford's meter lease is $1/mo (vs Joliet $5.16)
+  nonstandard_facilities_charge_monthly: 70.97   # Bedford has a Nonstandard Facilities Charge
+  dfc_per_kw_monthly:
+    1: 13.49
+    2: 13.49
+    3: 13.49
+    4: 13.49
+    5: 13.49
+    6: 13.49
+    7: 13.43
+    8: 13.43
+    9: 13.43
+    10: 13.43
+    11: 13.43
+    12: 13.43
+  iedt_per_kwh: 0.00124
+  on_peak:
+    weekday_start_hour: 9
+    weekday_end_hour: 22
+    weekdays_only: true
+    exclude_holidays: [new_years, memorial, independence, labor, thanksgiving, christmas]
+  demand_interval_min: 30
+  riders_per_kwh:
+    renewable_portfolio_standard: 0.00502
+    environmental_cost_recovery_monthly:
+      1: 0.00002
+      2: 0.00002
+      3: 0.00002
+      4: 0.00005
+      5: 0.00007
+      6: 0.00010
+      7: 0.00010
+      8: 0.00010
+      9: 0.00010
+      10: 0.00008
+      11: 0.00005
+      12: 0.00002
+    coal_to_solar_storage_fund: 0.00005
+    zero_emission_standard: 0.00195
+    # Same Carbon-Free Energy Resource Adj seasonal swing as Joliet (ComEd-wide rider)
+    carbon_free_energy_adj_monthly:
+      1: 0.00475         # from Bedford Jan-Feb bill (Joliet Feb was 0.00803)
+      2: 0.00475
+      3: 0.00300
+      4: 0.00150
+      5: -0.00300
+      6: -0.00781
+      7: -0.00781
+      8: -0.00781
+      9: -0.00500
+      10: -0.00100
+      11: 0.00200
+      12: 0.00475
+    energy_efficiency_programs: 0.00444
+    energy_transition_assistance: 0.00072
+  # Franchise: Bedford's bills show 0.842% (Jan-Feb), 0.829% (Jul-Aug) against a basis
+  # that is ~92.8% of (DFC + IEDT). Effective rate against DFC+IEDT basis = rate × 0.928:
+  #   Feb: 0.928 × 0.00842 = 0.00781
+  #   Aug: 0.928 × 0.00829 = 0.00769
+  franchise_effective_rate_monthly:
+    1: 0.00781
+    2: 0.00781
+    3: 0.00778
+    4: 0.00775
+    5: 0.00772
+    6: 0.00770
+    7: 0.00769
+    8: 0.00769
+    9: 0.00770
+    10: 0.00775
+    11: 0.00778
+    12: 0.00781
+  franchise_basis: dfc_iedt
+  il_excise_effective_per_kwh: 0.00295        # effective $/kWh from Bedford bills
+  il_excise_marginal_per_kwh: 0.00244
+  # Bedford Park does not impose a municipal electricity tax → 0
+  municipal_tax_per_kwh: 0.0
+
+# Supply: Bedford is on a Freepoint Energy Solutions passthrough contract
+# (contract expires 2026-01-15 per the Jul-Aug supply bill).
+supply_tariff:
+  primary: freepoint
+  freepoint:
+    # Rates from the Jul-Aug 2025 supply bill
+    hub_energy_rate_per_kwh: 0.05126            # Hub Energy passthrough
+    fixed_retail_adder_per_kwh: 0.01031         # Fixed Adder (flat $/kWh)
+    basis_residual_rate_per_kwh: 0.00049        # Basis Residual Aggregate Passthrough
+    basis_passthrough_rate_per_kwh: -0.00015    # Basis Passthrough (can be negative)
+    losses_reduction_factor: 0.00141            # derived from bill (billed vs metered kWh)
+    # Capacity: 1,254.79 kW × $0.27043/kW-day × 29 days = $9,840.74 from the Jul-Aug bill.
+    # The PLC tag (~1,255 kW) is set by prior summer's PJM 5CP hours — fixed annual value
+    # for delivery-year Jun-May.
+    capacity_obligation_kw: 1254.79
+    capacity_rate_per_kw_day: 0.27043
+    # Transmission: 1,468.37 kW × $0.13487/kW-day × 29 days = $5,743.15 from the Jul-Aug bill.
+    nspl_kw: 1468.37
+    transmission_rate_per_kw_day: 0.13487
+
+export:
+  allowed: false
+  rate_per_kwh_if_allowed: 0.0
+
+battery:
+  # User-designated primary size for Bedford: 1250 kW / 2535 kWh
+  power_kw: 1250
+  energy_kwh: 2535
+  coupling: AC
+  chemistry: Li-ion
+  rte_ac_ac: 0.88
+  soc_min_frac: 0.05
+  soc_max_frac: 0.95
+  soc_init_frac: 0.50
+  aux_load_frac_per_day: 0.005
+  calendar_year_capacity_retention: 1.00
+
+battery_sizes_to_sweep:
+  - {power_kw: 250,  energy_kwh: 507,  label: "250kW/507kWh"}
+  - {power_kw: 500,  energy_kwh: 1014, label: "500kW/1014kWh"}
+  - {power_kw: 750,  energy_kwh: 1521, label: "750kW/1521kWh"}
+  - {power_kw: 1000, energy_kwh: 2028, label: "1000kW/2028kWh"}
+  - {power_kw: 1250, energy_kwh: 2535, label: "1250kW/2535kWh"}
+  - {power_kw: 1500, energy_kwh: 3042, label: "1500kW/3042kWh"}
+
+sizing_economics:
+  marginal_capex_per_kwh_added: 350
+  target_simple_payback_years: 10
+  marginal_capex_low:  250
+  marginal_capex_high: 500
+
+value_streams:
+  dfc_reduction: true
+  plc_reduction: true
+  nspl_reduction: true
+  energy_arbitrage: true
+  solar_self_consumption: true
+  dr_opportunity: true
+  power_factor: false
+  resilience: false
+  ancillary: false
+
+dr_programs_evaluated:
+  - name: PJM Emergency Load Response (Capacity)
+    capacity_payment_per_kw_yr: 70.0
+    energy_payment_per_kwh: 0.0
+    max_events_per_year: 10
+    max_hours_per_year: 60
+    event_duration_hr: 2
+    notification_hr: 0.5
+    committed_kw: 1250
+  - name: ComEd Voluntary Load Response
+    capacity_payment_per_kw_yr: 45.0
+    energy_payment_per_kwh: 0.05
+    max_events_per_year: 20
+    max_hours_per_year: 100
+    event_duration_hr: 2
+    notification_hr: 2.0
+    committed_kw: 1250
+  - name: PJM Economic Load Response (Energy)
+    capacity_payment_per_kw_yr: 0.0
+    energy_payment_per_kwh: 0.08
+    max_events_per_year: 999
+    max_hours_per_year: 999
+    event_duration_hr: 2
+    notification_hr: 1.0
+    committed_kw: 1250
+
+solar_synthesis:
+  dc_capacity_kw: 2500        # ~2 MW AC with 1.25 DC/AC → ~2.5 MW DC nameplate
+  dc_to_ac_ratio: 1.25
+  ac_inverter_limit_kw: 2000
+  tilt_deg: 20
+  azimuth_deg: 180
+  module_derate: 0.85
+  clear_sky_fraction_monthly:
+    1: 0.42
+    2: 0.45
+    3: 0.50
+    4: 0.53
+    5: 0.57
+    6: 0.60
+    7: 0.62
+    8: 0.60
+    9: 0.58
+    10: 0.50
+    11: 0.38
+    12: 0.38
+
+mpc:
+  horizon_hours: 36
+  control_timestep_hours: 1
+  dfc_penalty_per_kw_above_target: 30.0
+  plc_penalty_per_kw_above_target: 10000.0
+  nspl_penalty_per_kw_above_target: 5000.0

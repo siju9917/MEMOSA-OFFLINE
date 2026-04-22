@@ -8,6 +8,7 @@ site:
   utility: ComEd
   iso: PJM
   zone: COMED
+  solar_ac_nameplate_kw: 4000
 
 data:
   load_csv: JolietLoadData.csv
@@ -17,6 +18,14 @@ data:
   solar_time_col: "Site Time"
   solar_production_cols: ["METER - PRODUCTION (A-North) Kilowatt hours", "METER - PRODUCTION (B-South) Kilowatt hours"]
   evaluation_year: 2025
+  # Joliet: solar installed 2026, load data 2025 is pre-solar → no embedding
+  solar_embedded_in_load: false
+
+# PLC/NSPL anchor hours: Joliet Aug-Sep supply bill confirmed 8/15/25 18:00 as the
+# site's coincident peak hour. Listed as naive timestamps; CLI localizes to site tz.
+plc_anchor_hours:
+  - "2025-08-15 18:00"
+nspl_anchor_hour: "2025-08-15 18:00"
 
 delivery_tariff:
   kind: comed_vll_secondary
@@ -40,6 +49,8 @@ delivery_tariff:
     11: 13.43
     12: 13.43
   iedt_per_kwh: 0.00124
+  # Joliet bills show no Nonstandard Facilities Charge → 0
+  nonstandard_facilities_charge_monthly: 0.0
   # on-peak window per ratebook line 9026: Mon-Fri 9AM-10PM CPT, ex holidays
   on_peak:
     weekday_start_hour: 9

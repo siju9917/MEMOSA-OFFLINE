@@ -56,6 +56,39 @@ def load_solar(csv_path: str | Path, time_col: str, prod_cols: list[str], tz: st
     return df
 
 
+def reconstruct_gross_load(
+    load_df: pd.DataFrame,
+    solar_df: pd.DataFrame,
+    meter_cols: list[str],
+) -> pd.DataFrame:
+    """When site's load CSV has solar output embedded (net metering / behind-the-meter),
+    reconstruct gross pre-solar load by ADDING measured solar back to the net reading.
+
+    For hours where measured solar is unavailable (outside the solar-data window), the
+    load is left as-is (it represents gross load in those hours, since no solar existed).
+
+    Solar is allocated proportionally across meters by each meter's load share at that
+    hour, clamped so no meter goes below a small floor.
+
+    Returns a DataFrame with the same schema as load_df (mdp1, mdp2, combined_kw) but
+    representing the reconstructed GROSS load (what the site would have drawn without
+    any solar installed).
+    """
+    gross = load_df.copy()
+    # Align solar to load index; missing hours → 0 (no solar available / pre-commissioning)
+    solar_aligned = solar_df["combined_kw"].reindex(gross.index).fillna(0.0)
+
+    # Allocate solar across meters proportionally to each meter's net load.
+    # Use the NET (load_df) values; when both are nearly zero (shouldn't happen in real
+    # industrial loads), fall back to equal 50/50 split.
+    net_sum = gross[meter_cols].sum(axis=1)
+    for c in meter_cols:
+        share = (gross[c] / net_sum.replace(0, 1)).where(net_sum > 0, 1.0 / len(meter_cols))
+        gross[c] = gross[c] + share * solar_aligned
+    gross["combined_kw"] = gross[meter_cols].sum(axis=1)
+    return gross
+
+
 def validate(load_df: pd.DataFrame, solar_df: pd.DataFrame | None = None) -> dict:
     """Return a data-quality report dict."""
     r = {}

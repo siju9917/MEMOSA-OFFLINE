@@ -50,20 +50,36 @@ def _compute_value(
     lmp: pd.Series,
     battery: BatterySpec,
     delivery: ComEdVLLDelivery,
-    supply: IndexSupply,
+    supply,
     dfc_monthly: dict,
     plc_hours: list,
     nspl_hour: pd.Timestamp,
     mpc_cfg: dict,
     export_allowed: bool,
     export_rate: float,
-    load_mape: float,
-    solar_mape: float,
-    lmp_mape: float,
-    seed: int,
+    load_mape: float = 0.04,  # kept for signature compatibility; unused in PF path
+    solar_mape: float = 0.15,
+    lmp_mape: float = 0.10,
+    seed: int = 42,            # unused in PF path
+    mpc_gap_factor: float = 0.83,
 ) -> float:
-    """Single end-to-end: baseline vs MPC-realistic → return $ annual savings."""
-    # Baseline
+    """End-to-end: baseline vs PERFECT-FORESIGHT × gap_factor → $ annual savings.
+
+    Why PF (not noisy-MPC) for sensitivity/MC analyses:
+      - PF is deterministic → same inputs give same output (needed for honest tornado)
+      - PF is monotonic in battery size (needed for sizing)
+      - For flat-load sites (e.g. cold storage), noisy-foresight has pathological
+        seed-variance that would DOMINATE input sensitivity. PF scaling cleanly
+        separates 'how do fundamental inputs affect value' (measured here) from
+        'how much does realistic dispatch lose vs optimal' (the gap_factor).
+
+    The gap_factor is computed externally once (from multi-seed MEMOSA mean at the
+    primary size / PF at the primary size) and applied uniformly here. This is a
+    conservative and stable estimation strategy.
+    """
+    from .dispatch.perfect_foresight import perfect_foresight_dispatch
+
+    # Baseline (deterministic)
     bl = year_df.copy()
     bl["p_chg"] = 0.0
     bl["p_dis"] = 0.0
@@ -75,21 +91,17 @@ def _compute_value(
         plc_hours, [nspl_hour], "baseline"
     )
 
-    # MPC
-    mpc_raw = noisy_foresight_dispatch(
-        year_df, battery, dfc_monthly,
-        plc_hours, [nspl_hour], mpc_cfg,
+    pf_out = perfect_foresight_dispatch(
+        year_df, battery, dfc_monthly, plc_hours, [nspl_hour], mpc_cfg,
         export_allowed=export_allowed, export_rate_per_kwh=export_rate,
-        load_mape=load_mape, solar_mape=solar_mape, lmp_mape=lmp_mape,
-        seed=seed,
     )
-    mpc_df = mpc_raw.join(year_df[["mdp1", "mdp2"]])
-    mpc_res = annual_cost_from_dispatch(
-        mpc_df, ["mdp1", "mdp2"], delivery, supply, lmp,
-        plc_hours, [nspl_hour], "mpc"
+    pf_df = pf_out.df.join(year_df[["mdp1", "mdp2"]])
+    pf_res = annual_cost_from_dispatch(
+        pf_df, ["mdp1", "mdp2"], delivery, supply, lmp,
+        plc_hours, [nspl_hour], "pf"
     )
-    comp = compare_scenarios(bl_res, mpc_res)
-    return comp["battery_value_annual"]
+    comp = compare_scenarios(bl_res, pf_res)
+    return float(comp["battery_value_annual"]) * mpc_gap_factor
 
 
 def run_tornado(
@@ -97,7 +109,7 @@ def run_tornado(
     lmp: pd.Series,
     battery: BatterySpec,
     delivery: ComEdVLLDelivery,
-    supply: IndexSupply,
+    supply,
     dfc_monthly: dict,
     plc_hours: list,
     nspl_hour: pd.Timestamp,
@@ -106,21 +118,20 @@ def run_tornado(
     export_allowed: bool = False,
     export_rate: float = 0.0,
     plc_reduction_value: float = 73875.0,
+    mpc_gap_factor: float = 0.83,
 ) -> list[dict]:
     """Perform tornado sensitivity: vary each assumption ±1σ, compute battery value delta."""
     def run(ylbl: str, **overrides):
-        # Clone year_df and lmp with overrides
         df = overrides.get("year_df", year_df)
         lmp_s = overrides.get("lmp", lmp)
         dfc_m = overrides.get("dfc_monthly", dfc_monthly)
         plc = overrides.get("plc_hours", plc_hours)
         nspl = overrides.get("nspl_hour", nspl_hour)
-        lm = overrides.get("load_mape", 0.04)
-        sm = overrides.get("solar_mape", 0.15)
-        lmpm = overrides.get("lmp_mape", 0.10)
-        return _compute_value(df, lmp_s, battery, delivery, supply, dfc_m,
-                              plc, nspl, mpc_cfg, export_allowed, export_rate,
-                              lm, sm, lmpm, seed=42)
+        return _compute_value(
+            df, lmp_s, battery, delivery, supply, dfc_m,
+            plc, nspl, mpc_cfg, export_allowed, export_rate,
+            mpc_gap_factor=mpc_gap_factor,
+        )
 
     rows = []
 
@@ -178,30 +189,29 @@ def run_tornado(
     lo = baseline_value  # baseline is the hourly-data case
     rows.append({"label": "15-min billing interval (hourly understates)", "lo": lo, "hi": hi})
 
-    # 6. MPC forecast skill (load 3-6%, solar 10-20%, lmp 7-12%)
-    hi = run("", load_mape=0.03, solar_mape=0.10, lmp_mape=0.07)
-    lo = run("", load_mape=0.06, solar_mape=0.20, lmp_mape=0.12)
-    rows.append({"label": "MPC forecast skill (±typical)", "lo": lo, "hi": hi})
+    # 6. Controller quality (MEMOSA-vs-PF gap) — scale PF value by ±5pp gap band
+    lo = baseline_value * (mpc_gap_factor - 0.05) / mpc_gap_factor if mpc_gap_factor > 0 else baseline_value
+    hi = baseline_value * (mpc_gap_factor + 0.05) / mpc_gap_factor if mpc_gap_factor > 0 else baseline_value
+    rows.append({"label": "Controller quality (MEMOSA vs PF gap ±5pp)", "lo": lo, "hi": hi})
 
-    # 7. RTE (±2%)
-    bat_lo = BatterySpec(
-        power_kw=battery.power_kw, energy_kwh=battery.energy_kwh, rte_ac_ac=battery.rte_ac_ac - 0.02,
-        soc_min_frac=battery.soc_min_frac, soc_max_frac=battery.soc_max_frac,
-        soc_init_frac=battery.soc_init_frac, aux_load_frac_per_day=battery.aux_load_frac_per_day,
-        coupling=battery.coupling,
-    )
-    bat_hi = BatterySpec(
-        power_kw=battery.power_kw, energy_kwh=battery.energy_kwh, rte_ac_ac=battery.rte_ac_ac + 0.02,
-        soc_min_frac=battery.soc_min_frac, soc_max_frac=battery.soc_max_frac,
-        soc_init_frac=battery.soc_init_frac, aux_load_frac_per_day=battery.aux_load_frac_per_day,
-        coupling=battery.coupling,
-    )
-    lo_val = _compute_value(year_df, lmp, bat_lo, delivery, supply, dfc_monthly,
+    # 7. Battery RTE (±2pp) — changes physical dispatch, need real LP re-run
+    def _bat_at_rte(rte):
+        return BatterySpec(
+            power_kw=battery.power_kw, energy_kwh=battery.energy_kwh,
+            rte_ac_ac=rte,
+            soc_min_frac=battery.soc_min_frac, soc_max_frac=battery.soc_max_frac,
+            soc_init_frac=battery.soc_init_frac,
+            aux_load_frac_per_day=battery.aux_load_frac_per_day,
+            coupling=battery.coupling,
+        )
+    lo_val = _compute_value(year_df, lmp, _bat_at_rte(battery.rte_ac_ac - 0.02),
+                             delivery, supply, dfc_monthly,
                              plc_hours, nspl_hour, mpc_cfg, export_allowed, export_rate,
-                             0.04, 0.15, 0.10, seed=42)
-    hi_val = _compute_value(year_df, lmp, bat_hi, delivery, supply, dfc_monthly,
+                             mpc_gap_factor=mpc_gap_factor)
+    hi_val = _compute_value(year_df, lmp, _bat_at_rte(battery.rte_ac_ac + 0.02),
+                             delivery, supply, dfc_monthly,
                              plc_hours, nspl_hour, mpc_cfg, export_allowed, export_rate,
-                             0.04, 0.15, 0.10, seed=42)
+                             mpc_gap_factor=mpc_gap_factor)
     rows.append({"label": "Battery RTE (±2 pp)", "lo": lo_val, "hi": hi_val})
 
     for r in rows:
@@ -217,7 +227,7 @@ def run_monte_carlo(
     lmp: pd.Series,
     battery: BatterySpec,
     delivery: ComEdVLLDelivery,
-    supply: IndexSupply,
+    supply,
     dfc_monthly: dict,
     plc_hours: list,
     nspl_hour: pd.Timestamp,
@@ -227,7 +237,10 @@ def run_monte_carlo(
     export_allowed: bool = False,
     export_rate: float = 0.0,
     rng_seed: int = 2025,
-    plc_reduction_value: float = 73875.0,   # actual $ reduction value from primary run; dynamic
+    plc_reduction_value: float = 73875.0,
+    num_known_anchor_hours: int = 1,
+    total_plc_hours: int = 5,
+    mpc_gap_factor: float = 0.83,
 ) -> dict:
     """Monte Carlo sample joint uncertainty → P10/P50/P90 band on annual battery value."""
     rng = np.random.default_rng(rng_seed)
@@ -237,29 +250,24 @@ def run_monte_carlo(
         solar_mult = float(np.clip(rng.normal(1.0, 0.10), 0.7, 1.3))
         lmp_level_mult = float(np.clip(rng.normal(1.0, 0.12), 0.6, 1.4))
         lmp_intensity = float(np.clip(rng.normal(1.0, 0.15), 0.7, 1.4))
-        # PLC miss count — model as Binomial(4, p=0.20) (we know 1/5 for sure, the other 4 each have miss prob)
-        misses = int(rng.binomial(4, 0.20))
-        # Do NOT drop from the optimizer (that lets it redirect SOC incorrectly). Instead,
-        # always optimize with all 5 proxy hours and apply a post-hoc haircut to the
-        # resulting PLC savings to represent missed true-peak hours.
-        plc_use = plc_hours
-        load_mape = float(np.clip(rng.normal(0.045, 0.015), 0.02, 0.08))
-        solar_mape_v = float(np.clip(rng.normal(0.15, 0.03), 0.08, 0.22))
-        lmp_mape_v = float(np.clip(rng.normal(0.10, 0.025), 0.05, 0.16))
+        # PLC miss count — Binomial(non_anchor_count, p=0.20)
+        non_anchor = max(0, total_plc_hours - num_known_anchor_hours)
+        misses = int(rng.binomial(non_anchor, 0.20)) if non_anchor > 0 else 0
+        # Also MEMOSA controller quality: sample gap_factor ± ~5pp band
+        gap_sample = float(np.clip(rng.normal(mpc_gap_factor, 0.05), 0.50, 1.00))
 
         df_i = year_df.copy()
         df_i["solar_kw"] = year_df["solar_kw"] * solar_mult
-        # LMP level × intensity
         mean_lmp = float(lmp.mean())
         new_lmp = (mean_lmp + (lmp - mean_lmp) * lmp_intensity) * lmp_level_mult
         df_i["lmp"] = new_lmp.values
         val = _compute_value(
             df_i, new_lmp, battery, delivery, supply, dfc_monthly,
-            plc_use, nspl_hour, mpc_cfg, export_allowed, export_rate,
-            load_mape, solar_mape_v, lmp_mape_v, seed=100 + i,
+            plc_hours, nspl_hour, mpc_cfg, export_allowed, export_rate,
+            mpc_gap_factor=gap_sample,
         )
-        # Apply PLC-miss haircut: each missed hour loses 1/5 × 80% of the PLC reduction value.
-        plc_haircut = misses * (1.0/5.0) * 0.8 * plc_reduction_value
+        # PLC-miss haircut: each missed hour loses 1/total × 80% of PLC reduction value
+        plc_haircut = misses * (1.0 / total_plc_hours) * 0.8 * plc_reduction_value
         val -= plc_haircut
         vals.append(val)
     arr = np.array(vals)
