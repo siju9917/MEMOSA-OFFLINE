@@ -6,7 +6,8 @@ import pandas as pd
 
 
 def _parse_load_ts(s: str) -> pd.Timestamp:
-    s = s.replace(" CST", "").replace(" CDT", "")
+    for tz_abbrev in (" CST", " CDT", " EST", " EDT", " MST", " MDT", " PST", " PDT"):
+        s = s.replace(tz_abbrev, "")
     return pd.Timestamp(s)
 
 
@@ -99,8 +100,9 @@ def validate(load_df: pd.DataFrame, solar_df: pd.DataFrame | None = None) -> dic
     r["annual_kwh"] = float(load_df["combined_kw"].sum())  # hourly kW = kWh
     r["peak_kw"] = float(load_df["combined_kw"].max())
     r["load_factor"] = r["annual_kwh"] / (r["peak_kw"] * len(load_df)) if r["peak_kw"] > 0 else 0.0
-    r["mdp1_peak_kw"] = float(load_df["mdp1"].max())
-    r["mdp2_peak_kw"] = float(load_df["mdp2"].max())
+    for c in load_df.columns:
+        if c.startswith("mdp"):
+            r[f"{c}_peak_kw"] = float(load_df[c].max())
     if solar_df is not None:
         r["solar_start"] = str(solar_df.index.min())
         r["solar_end"] = str(solar_df.index.max())

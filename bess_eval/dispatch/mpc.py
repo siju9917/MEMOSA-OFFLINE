@@ -46,6 +46,7 @@ def noisy_foresight_dispatch(
     solar_mape: float = 0.15,
     lmp_mape: float = 0.10,
     seed: int = 42,
+    demand_on_peak_only: bool = True,
 ):
     """Apply multiplicative AR(1) noise, dispatch on noisy inputs, then replay battery
     schedule against the true inputs to compute realistic cost."""
@@ -57,7 +58,8 @@ def noisy_foresight_dispatch(
 
     noisy_res = perfect_foresight_dispatch(
         noisy, battery, dfc_per_kw_monthly, plc_hours, nspl_hours,
-        mpc_cfg, export_allowed, export_rate_per_kwh
+        mpc_cfg, export_allowed, export_rate_per_kwh,
+        demand_on_peak_only=demand_on_peak_only,
     )
     # Replay the noisy-derived battery schedule against true physics
     p_chg = noisy_res.df["p_chg"].values

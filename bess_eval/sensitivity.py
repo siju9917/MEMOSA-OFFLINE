@@ -62,6 +62,7 @@ def _compute_value(
     lmp_mape: float = 0.10,
     seed: int = 42,            # unused in PF path
     mpc_gap_factor: float = 0.83,
+    demand_on_peak_only: bool = True,
 ) -> float:
     """End-to-end: baseline vs PERFECT-FORESIGHT × gap_factor → $ annual savings.
 
@@ -86,18 +87,20 @@ def _compute_value(
     bl["soc_kwh"] = battery.soc_init_kwh
     bl["grid_import"] = np.maximum(0.0, bl["load_kw"] - bl["solar_kw"])
     bl["grid_export"] = 0.0
+    meter_cols = [c for c in year_df.columns if c.startswith("mdp")]
     bl_res = annual_cost_from_dispatch(
-        bl, ["mdp1", "mdp2"], delivery, supply, lmp,
+        bl, meter_cols, delivery, supply, lmp,
         plc_hours, [nspl_hour], "baseline"
     )
 
     pf_out = perfect_foresight_dispatch(
         year_df, battery, dfc_monthly, plc_hours, [nspl_hour], mpc_cfg,
         export_allowed=export_allowed, export_rate_per_kwh=export_rate,
+        demand_on_peak_only=demand_on_peak_only,
     )
-    pf_df = pf_out.df.join(year_df[["mdp1", "mdp2"]])
+    pf_df = pf_out.df.join(year_df[meter_cols])
     pf_res = annual_cost_from_dispatch(
-        pf_df, ["mdp1", "mdp2"], delivery, supply, lmp,
+        pf_df, meter_cols, delivery, supply, lmp,
         plc_hours, [nspl_hour], "pf"
     )
     comp = compare_scenarios(bl_res, pf_res)
@@ -119,6 +122,7 @@ def run_tornado(
     export_rate: float = 0.0,
     plc_reduction_value: float = 73875.0,
     mpc_gap_factor: float = 0.83,
+    demand_on_peak_only: bool = True,
 ) -> list[dict]:
     """Perform tornado sensitivity: vary each assumption ±1σ, compute battery value delta."""
     def run(ylbl: str, **overrides):
@@ -131,6 +135,7 @@ def run_tornado(
             df, lmp_s, battery, delivery, supply, dfc_m,
             plc, nspl, mpc_cfg, export_allowed, export_rate,
             mpc_gap_factor=mpc_gap_factor,
+            demand_on_peak_only=demand_on_peak_only,
         )
 
     rows = []
@@ -183,8 +188,8 @@ def run_tornado(
     # higher peak is in minutes we can't predict). Net: small upside to savings.
     scaled_df = year_df.copy()
     scaled_df["load_kw"] = year_df["load_kw"] * 1.03
-    scaled_df["mdp1"] = year_df["mdp1"] * 1.03
-    scaled_df["mdp2"] = year_df["mdp2"] * 1.03
+    for _c in [c for c in year_df.columns if c.startswith("mdp")]:
+        scaled_df[_c] = year_df[_c] * 1.03
     hi = run("", year_df=scaled_df)
     lo = baseline_value  # baseline is the hourly-data case
     rows.append({"label": "15-min billing interval (hourly understates)", "lo": lo, "hi": hi})
@@ -207,11 +212,13 @@ def run_tornado(
     lo_val = _compute_value(year_df, lmp, _bat_at_rte(battery.rte_ac_ac - 0.02),
                              delivery, supply, dfc_monthly,
                              plc_hours, nspl_hour, mpc_cfg, export_allowed, export_rate,
-                             mpc_gap_factor=mpc_gap_factor)
+                             mpc_gap_factor=mpc_gap_factor,
+                             demand_on_peak_only=demand_on_peak_only)
     hi_val = _compute_value(year_df, lmp, _bat_at_rte(battery.rte_ac_ac + 0.02),
                              delivery, supply, dfc_monthly,
                              plc_hours, nspl_hour, mpc_cfg, export_allowed, export_rate,
-                             mpc_gap_factor=mpc_gap_factor)
+                             mpc_gap_factor=mpc_gap_factor,
+                             demand_on_peak_only=demand_on_peak_only)
     rows.append({"label": "Battery RTE (±2 pp)", "lo": lo_val, "hi": hi_val})
 
     for r in rows:
@@ -241,6 +248,7 @@ def run_monte_carlo(
     num_known_anchor_hours: int = 1,
     total_plc_hours: int = 5,
     mpc_gap_factor: float = 0.83,
+    demand_on_peak_only: bool = True,
 ) -> dict:
     """Monte Carlo sample joint uncertainty → P10/P50/P90 band on annual battery value."""
     rng = np.random.default_rng(rng_seed)
@@ -265,6 +273,7 @@ def run_monte_carlo(
             df_i, new_lmp, battery, delivery, supply, dfc_monthly,
             plc_hours, nspl_hour, mpc_cfg, export_allowed, export_rate,
             mpc_gap_factor=gap_sample,
+            demand_on_peak_only=demand_on_peak_only,
         )
         # PLC-miss haircut: each missed hour loses 1/total × 80% of PLC reduction value
         plc_haircut = misses * (1.0 / total_plc_hours) * 0.8 * plc_reduction_value

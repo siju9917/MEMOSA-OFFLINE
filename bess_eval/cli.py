@@ -14,8 +14,7 @@ from .config import Config
 from .ingest import load_load, load_solar, validate, reconstruct_gross_load
 from .solar_synth import fit_solar_model, synthesize_year
 from .pjm_data import synthesize_hourly_lmp, find_proxy_5cp_hours, find_proxy_nspl_hour
-from .tariff.comed_delivery import ComEdVLLDelivery
-from .tariff import build_supply
+from .tariff import build_delivery, build_supply
 from .battery import BatterySpec
 from .dispatch.perfect_foresight import perfect_foresight_dispatch
 from .dispatch.rulebased import rule_based_dispatch
@@ -43,17 +42,24 @@ def run(cfg_path: str):
         kw_cols=cfg.data.load_kw_cols,
         tz=cfg.site.tz,
     )
-    solar_df = load_solar(
-        root / cfg.data.solar_csv,
-        time_col=cfg.data.solar_time_col,
-        prod_cols=cfg.data.solar_production_cols,
-        tz=cfg.site.tz,
-    )
+    solar_enabled = cfg.data.get("solar_enabled", True) and cfg.data.get("solar_csv") is not None
+    if solar_enabled:
+        solar_df = load_solar(
+            root / cfg.data.solar_csv,
+            time_col=cfg.data.solar_time_col,
+            prod_cols=cfg.data.solar_production_cols,
+            tz=cfg.site.tz,
+        )
+    else:
+        solar_df = None
     summary = validate(load_df, solar_df)
     summary["evaluation_year"] = cfg.data.evaluation_year
     print(f"  Load: {summary['load_start']} → {summary['load_end']} ({summary['load_rows']} hrs)")
     print(f"  Annual kWh (as-read): {summary['annual_kwh']:,.0f} | peak: {summary['peak_kw']:,.1f} kW")
-    print(f"  Solar measured: {summary['solar_measured_kwh']:,.0f} kWh ({summary['solar_start']} → {summary['solar_end']})")
+    if solar_df is not None:
+        print(f"  Solar measured: {summary['solar_measured_kwh']:,.0f} kWh ({summary['solar_start']} → {summary['solar_end']})")
+    else:
+        print(f"  Solar: DISABLED for this scenario (no solar data or solar_enabled=false)")
 
     # If solar is embedded in the load data (site already has solar during eval year),
     # reconstruct gross pre-solar load so we can apply the synthesized solar cleanly in
@@ -70,13 +76,36 @@ def run(cfg_path: str):
 
     # --- 2. Synthesize 2025 solar
     print("\n[2/9] Synthesizing 2025 solar ...")
-    fit = fit_solar_model(solar_df["combined_kw"], dict(cfg.site), dict(cfg.solar_synthesis))
-    print(f"  Solar model fit: k={fit['k']:.3f}  RMSE={fit['rmse']:.1f} kW  "
-          f"measured Jan-Apr={fit['measured_sum_kwh']:,.0f} kWh  predicted={fit['predicted_sum_kwh']:,.0f} kWh")
-    solar_2025 = synthesize_year(cfg.data.evaluation_year, cfg.site.tz, dict(cfg.site), dict(cfg.solar_synthesis), fit["k"])
+    if solar_df is not None:
+        fit = fit_solar_model(solar_df["combined_kw"], dict(cfg.site), dict(cfg.solar_synthesis))
+        print(f"  Solar model fit: k={fit['k']:.3f}  RMSE={fit['rmse']:.1f} kW  "
+              f"measured Jan-Apr={fit['measured_sum_kwh']:,.0f} kWh  predicted={fit['predicted_sum_kwh']:,.0f} kWh")
+        solar_2025 = synthesize_year(cfg.data.evaluation_year, cfg.site.tz, dict(cfg.site), dict(cfg.solar_synthesis), fit["k"])
+    elif cfg.solar_synthesis.get("hypothetical_from_nameplate", False):
+        # No measured solar — build a hypothetical profile from clear-sky × monthly CSF
+        # scaled so the annual total equals nameplate_kw × expected_annual_cf × 8760.
+        print(f"  No measured solar — synthesizing hypothetical profile from nameplate kW")
+        nameplate_kw = cfg.solar_synthesis.ac_inverter_limit_kw
+        expected_cf = cfg.solar_synthesis.get("expected_annual_cf", 0.16)   # PA is ~15-17% CF
+        target_annual_kwh = nameplate_kw * expected_cf * 8760
+        # Use k=1.0, synthesize, then rescale to hit the target
+        probe = synthesize_year(cfg.data.evaluation_year, cfg.site.tz, dict(cfg.site),
+                                 dict(cfg.solar_synthesis), k=1.0)
+        probe_sum = float(probe.sum())
+        k_adjusted = target_annual_kwh / probe_sum if probe_sum > 0 else 0.0
+        solar_2025 = synthesize_year(cfg.data.evaluation_year, cfg.site.tz, dict(cfg.site),
+                                      dict(cfg.solar_synthesis), k=k_adjusted)
+        print(f"  Hypothetical system: {nameplate_kw:,.0f} kW AC, expected CF {expected_cf*100:.1f}% → {target_annual_kwh:,.0f} kWh/yr")
+    else:
+        # No solar at all — return zero-solar series of correct length for this year
+        idx = pd.date_range(f"{cfg.data.evaluation_year}-01-01",
+                             f"{cfg.data.evaluation_year+1}-01-01",
+                             freq="1h", tz=cfg.site.tz, inclusive="left")
+        solar_2025 = pd.Series(0.0, index=idx, name="solar_kw")
+        print(f"  No solar in this scenario (all zeros)")
     solar_annual = float(solar_2025.sum())
     inv_cap = cfg.solar_synthesis.get("ac_inverter_limit_kw", 4000)
-    print(f"  Synthesized 2025 solar: {solar_annual:,.0f} kWh ({solar_annual/(inv_cap*8760)*100:.1f}% CF on {inv_cap:,.0f} kW AC)")
+    print(f"  2025 solar total: {solar_annual:,.0f} kWh ({solar_annual/(max(inv_cap,1)*8760)*100:.1f}% CF on {inv_cap:,.0f} kW AC)")
 
     # --- 3. Synthesize LMPs
     print("\n[3/9] Synthesizing hourly LMPs ...")
@@ -118,23 +147,29 @@ def run(cfg_path: str):
 
     # --- 5. Assemble full-year dataframe
     print("\n[5/9] Assembling full-year simulation frame ...")
-    # Limit to evaluation year hours only
     idx = pd.date_range(f"{cfg.data.evaluation_year}-01-01", f"{cfg.data.evaluation_year+1}-01-01",
                          freq="1h", tz=cfg.site.tz, inclusive="left")
     year_df = pd.DataFrame(index=idx)
     ld = load_df.reindex(idx).ffill().bfill()
-    year_df["mdp1"] = ld["mdp1"].values
-    year_df["mdp2"] = ld["mdp2"].values
+    # Generalize to 1 or more meters
+    num_meters = len(cfg.data.load_kw_cols)
+    meter_keys = [f"mdp{i+1}" for i in range(num_meters)]
+    for k in meter_keys:
+        year_df[k] = ld[k].values
     year_df["load_kw"] = ld["combined_kw"].values
     year_df["solar_kw"] = solar_2025.reindex(idx).fillna(0).values
     year_df["lmp"] = lmp.reindex(idx).ffill().bfill().values
-    print(f"  Year frame: {len(year_df)} hours")
+    print(f"  Year frame: {len(year_df)} hours, {num_meters} meter(s)")
 
     # --- 6. Set up tariff engines + battery
-    delivery = ComEdVLLDelivery(dict(cfg.delivery_tariff))
+    delivery = build_delivery(dict(cfg.delivery_tariff))
     supply = build_supply(supply_cfg)
     battery = BatterySpec.from_cfg(dict(cfg.battery))
     tag_costs = supply.annual_tag_cost(supply.capacity_obligation_kw, supply.nspl_kw)
+    # Delivery-demand semantics differ: ComEd bills DFC on on-peak-only kW; PECO bills
+    # the overall max kW. The dispatch LP uses this to decide which hours constrain
+    # peak_kw. Flag is inferred from the delivery-tariff kind.
+    demand_on_peak_only = dict(cfg.delivery_tariff).get("kind", "comed_vll_secondary") == "comed_vll_secondary"
     print(f"  Battery: {battery.power_kw} kW / {battery.energy_kwh} kWh, RTE {battery.rte_ac_ac}")
     print(f"  Annual tag cost baseline: capacity ${tag_costs['capacity_annual']:,.0f}  "
           f"transmission ${tag_costs['transmission_annual']:,.0f}")
@@ -149,22 +184,31 @@ def run(cfg_path: str):
     baseline_df["grid_import"] = np.maximum(0.0, baseline_df["load_kw"] - baseline_df["solar_kw"])
     baseline_df["grid_export"] = np.maximum(0.0, baseline_df["solar_kw"] - baseline_df["load_kw"])
     baseline_result = annual_cost_from_dispatch(
-        baseline_df, ["mdp1", "mdp2"], delivery, supply, lmp, plc_hours, [nspl_hour], "Baseline (no battery)"
+        baseline_df, meter_keys, delivery, supply, lmp, plc_hours, [nspl_hour], "Baseline (no battery)"
     )
     print(f"  Baseline annual: delivery ${baseline_result.delivery_cost:,.0f}  "
           f"supply ${baseline_result.supply_cost:,.0f}  TOTAL ${baseline_result.total:,.0f}")
 
     # Perfect foresight
     print("\n[7/9] Running perfect-foresight dispatch ...")
+    # For PECO, use flat dist rate. For ComEd, use monthly DFC schedule.
+    _dt = dict(cfg.delivery_tariff)
+    if "dfc_per_kw_monthly" in _dt:
+        dfc_monthly_cfg = dict(_dt["dfc_per_kw_monthly"])
+    else:
+        flat = _dt.get("distribution_rate_per_kw", 7.12)
+        dfc_monthly_cfg = {m: flat for m in range(1, 13)}
+
     pf_res = perfect_foresight_dispatch(
-        year_df, battery, dict(cfg.delivery_tariff.dfc_per_kw_monthly),
+        year_df, battery, dfc_monthly_cfg,
         plc_hours, [nspl_hour], dict(cfg.mpc),
         export_allowed=cfg.export.allowed,
         export_rate_per_kwh=cfg.export.rate_per_kwh_if_allowed,
+        demand_on_peak_only=demand_on_peak_only,
     )
-    pf_df = pf_res.df.join(year_df[["mdp1", "mdp2"]])
+    pf_df = pf_res.df.join(year_df[meter_keys])
     pf_result = annual_cost_from_dispatch(
-        pf_df, ["mdp1", "mdp2"], delivery, supply, lmp, plc_hours, [nspl_hour], "Perfect foresight"
+        pf_df, meter_keys, delivery, supply, lmp, plc_hours, [nspl_hour], "Perfect foresight"
     )
     comparison_pf = compare_scenarios(baseline_result, pf_result)
     print(f"  PF annual: ${pf_result.total:,.0f}  savings=${comparison_pf['battery_value_annual']:,.0f}")
@@ -178,15 +222,16 @@ def run(cfg_path: str):
     seed_savings = []
     for sd in seeds:
         mpc_raw_i = rolling_mpc_dispatch(
-            year_df, battery, dict(cfg.delivery_tariff.dfc_per_kw_monthly),
+            year_df, battery, dfc_monthly_cfg,
             plc_hours, [nspl_hour], dict(cfg.mpc),
             export_allowed=cfg.export.allowed,
             export_rate_per_kwh=cfg.export.rate_per_kwh_if_allowed,
             seed=sd,
+            demand_on_peak_only=demand_on_peak_only,
         )
-        mpc_df_i = mpc_raw_i.join(year_df[["mdp1", "mdp2"]])
+        mpc_df_i = mpc_raw_i.join(year_df[meter_keys])
         res_i = annual_cost_from_dispatch(
-            mpc_df_i, ["mdp1", "mdp2"], delivery, supply, lmp, plc_hours, [nspl_hour],
+            mpc_df_i, meter_keys, delivery, supply, lmp, plc_hours, [nspl_hour],
             f"MEMOSA seed={sd}"
         )
         comp_i = compare_scenarios(baseline_result, res_i)
@@ -224,10 +269,10 @@ def run(cfg_path: str):
 
     # Rule-based
     print("\n  ... rule-based dispatch ...")
-    rb_df_raw = rule_based_dispatch(year_df, battery)
-    rb_df = rb_df_raw.join(year_df[["mdp1", "mdp2"]])
+    rb_df_raw = rule_based_dispatch(year_df, battery, demand_on_peak_only=demand_on_peak_only)
+    rb_df = rb_df_raw.join(year_df[meter_keys])
     rb_result = annual_cost_from_dispatch(
-        rb_df, ["mdp1", "mdp2"], delivery, supply, lmp, plc_hours, [nspl_hour], "Rule-based"
+        rb_df, meter_keys, delivery, supply, lmp, plc_hours, [nspl_hour], "Rule-based"
     )
     comparison_rb = compare_scenarios(baseline_result, rb_result)
     print(f"  RB annual: ${rb_result.total:,.0f}  savings=${comparison_rb['battery_value_annual']:,.0f}")
@@ -248,13 +293,14 @@ def run(cfg_path: str):
     plc_reduction_value = comparison_mpc["streams"]["plc_capacity_tag_reduction"]
     tornado = run_tornado(
         year_df, lmp, battery, delivery, supply,
-        dict(cfg.delivery_tariff.dfc_per_kw_monthly),
+        dfc_monthly_cfg,
         plc_hours, nspl_hour, dict(cfg.mpc),
         baseline_value=baseline_value_for_sens,
         export_allowed=cfg.export.allowed,
         export_rate=cfg.export.rate_per_kwh_if_allowed,
         plc_reduction_value=plc_reduction_value,
         mpc_gap_factor=mpc_gap_factor,
+        demand_on_peak_only=demand_on_peak_only,
     )
     print("  Ranked by swing (|hi-lo|):")
     for r in tornado:
@@ -266,11 +312,12 @@ def run(cfg_path: str):
     sizes = [(s["power_kw"], s["energy_kwh"], s["label"]) for s in sizes_cfg]
     sizing_results = run_sweep(
         sizes, year_df, lmp, dict(cfg.battery), delivery, supply,
-        dict(cfg.delivery_tariff.dfc_per_kw_monthly),
+        dfc_monthly_cfg,
         plc_hours, nspl_hour, dict(cfg.mpc),
         export_allowed=cfg.export.allowed,
         export_rate=cfg.export.rate_per_kwh_if_allowed,
         mpc_gap_factor=mpc_gap_factor,
+        demand_on_peak_only=demand_on_peak_only,
     )
     print(f"  {'Size':<20} {'Annual $':>12} {'Marg $/kWh':>14}")
     for r in sizing_results:
@@ -304,7 +351,7 @@ def run(cfg_path: str):
     num_anchors = len(anchor_list_raw)
     mc = run_monte_carlo(
         year_df, lmp, battery, delivery, supply,
-        dict(cfg.delivery_tariff.dfc_per_kw_monthly),
+        dfc_monthly_cfg,
         plc_hours, nspl_hour, dict(cfg.mpc),
         baseline_value=baseline_value_for_sens,
         n_samples=20,
@@ -314,6 +361,7 @@ def run(cfg_path: str):
         num_known_anchor_hours=num_anchors,
         total_plc_hours=5,
         mpc_gap_factor=mpc_gap_factor,
+        demand_on_peak_only=demand_on_peak_only,
     )
     print(f"  P10: ${mc['p10']:,.0f}   P50: ${mc['p50']:,.0f}   P90: ${mc['p90']:,.0f}")
     print(f"  Mean: ${mc['mean']:,.0f}  StDev: ${mc['std']:,.0f}")

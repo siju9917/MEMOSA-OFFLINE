@@ -69,6 +69,7 @@ def run_sweep(
     export_allowed: bool = False,
     export_rate: float = 0.0,
     mpc_gap_factor: float = 0.83,   # realistic-vs-PF ratio for final scaling (set externally)
+    demand_on_peak_only: bool = True,
 ) -> list[SizingResult]:
     """Run perfect-foresight dispatch per size (deterministic + monotonic) and return
     annual savings. Using PF instead of noisy-foresight here because:
@@ -91,17 +92,21 @@ def run_sweep(
         bl["soc_kwh"] = battery.soc_init_kwh
         bl["grid_import"] = np.maximum(0.0, bl["load_kw"] - bl["solar_kw"])
         bl["grid_export"] = 0.0
+        meter_cols = [c for c in year_df.columns if c.startswith("mdp")]
         bl_res = annual_cost_from_dispatch(
-            bl, ["mdp1", "mdp2"], delivery, supply, lmp, plc_hours, [nspl_hour], "baseline"
+            bl, meter_cols, delivery, supply, lmp, plc_hours, [nspl_hour], "baseline"
         )
         # PF with battery
         pf_out = perfect_foresight_dispatch(
             year_df, battery, dfc_monthly, plc_hours, [nspl_hour], mpc_cfg,
             export_allowed=export_allowed, export_rate_per_kwh=export_rate,
+            demand_on_peak_only=demand_on_peak_only,
         )
-        pf_df = pf_out.df.join(year_df[["mdp1", "mdp2"]])
+        # Join per-meter columns dynamically (1 or 2 meters)
+        meter_cols = [c for c in year_df.columns if c.startswith("mdp")]
+        pf_df = pf_out.df.join(year_df[meter_cols])
         pf_res = annual_cost_from_dispatch(
-            pf_df, ["mdp1", "mdp2"], delivery, supply, lmp, plc_hours, [nspl_hour], "pf"
+            pf_df, meter_cols, delivery, supply, lmp, plc_hours, [nspl_hour], "pf"
         )
         comp = compare_scenarios(bl_res, pf_res)
         pf_savings = comp["battery_value_annual"]

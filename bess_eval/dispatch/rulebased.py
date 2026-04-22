@@ -11,6 +11,7 @@ def rule_based_dispatch(
     year_df: pd.DataFrame,
     battery: BatterySpec,
     demand_threshold_ratio: float = 0.80,
+    demand_on_peak_only: bool = True,
 ) -> pd.DataFrame:
     """Simple heuristic dispatch:
       - If solar > load: charge battery with excess (to max P_chg)
@@ -19,7 +20,10 @@ def rule_based_dispatch(
     Monthly peak threshold ratchets up during the month.
     """
     net_load = (year_df["load_kw"] - year_df["solar_kw"]).values
-    on_peak = on_peak_mask(year_df.index).values
+    if demand_on_peak_only:
+        on_peak = on_peak_mask(year_df.index).values
+    else:
+        on_peak = np.ones(len(year_df), dtype=bool)
     n = len(year_df)
 
     soc = np.zeros(n)

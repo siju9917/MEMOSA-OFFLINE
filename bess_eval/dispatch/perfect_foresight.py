@@ -44,6 +44,7 @@ def _solve_month(
     export_allowed: bool,
     export_rate_per_kwh: float,
     terminal_soc_kwh: float | None = None,
+    demand_on_peak_only: bool = True,  # ComEd VLL: True; PECO HT: False (max anytime)
 ) -> pd.DataFrame:
     """Monthly LP. Returns hourly trajectory DataFrame."""
     m = pyo.ConcreteModel()
@@ -99,11 +100,12 @@ def _solve_month(
             return m.grid_export[t] == 0
         m.noexport = pyo.Constraint(m.T, rule=noexport)
 
-    # Peak tracking (only on-peak hours constrain peak_kw)
+    # Peak tracking. ComEd (VLL) bills DFC on on-peak max only. PECO (HT) bills on
+    # overall max regardless of hour. Flag controls which.
     def peak_rule(m, t):
-        if on_peak[t]:
-            return m.peak_kw >= m.grid_import[t]
-        return pyo.Constraint.Skip
+        if demand_on_peak_only and not on_peak[t]:
+            return pyo.Constraint.Skip
+        return m.peak_kw >= m.grid_import[t]
     m.peak_c = pyo.Constraint(m.T, rule=peak_rule)
 
     # PLC / NSPL penalty: encourage grid_import ~ 0 at these hours
@@ -147,6 +149,7 @@ def perfect_foresight_dispatch(
     mpc_cfg: dict,
     export_allowed: bool = False,
     export_rate_per_kwh: float = 0.0,
+    demand_on_peak_only: bool = True,     # ComEd True, PECO False
 ) -> DispatchResult:
     """Solve the full-year perfect-foresight dispatch month by month.
 
@@ -177,6 +180,7 @@ def perfect_foresight_dispatch(
             export_allowed=export_allowed,
             export_rate_per_kwh=export_rate_per_kwh,
             terminal_soc_kwh=terminal,
+            demand_on_peak_only=demand_on_peak_only,
         )
         results.append(out)
         soc = float(out["soc_kwh"].iloc[-1])

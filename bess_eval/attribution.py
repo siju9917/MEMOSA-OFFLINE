@@ -53,14 +53,22 @@ class AnnualResult:
 def allocate_battery_to_meters(df: pd.DataFrame, mdp_cols: Sequence[str]) -> pd.DataFrame:
     """Distribute battery_delta[t] = p_dis[t] - p_chg[t] across meters proportionally to
     each meter's load share at time t. Returns DataFrame with mdpX_net columns (kW seen at
-    each meter after battery + solar allocation)."""
+    each meter after battery + solar allocation).
+
+    Works for 1 or more meters:
+      - single-meter sites (PECO Philadelphia): all solar and battery offset the one meter
+      - multi-meter sites (ComEd Joliet/Bedford): proportional allocation by load share
+    """
     battery_delta = df["p_dis"] - df["p_chg"]
     gross = df[list(mdp_cols)].sum(axis=1)
     solar = df["solar_kw"]
-    # Allocate solar proportionally too
     out = pd.DataFrame(index=df.index)
+    n = len(mdp_cols)
     for c in mdp_cols:
-        share = np.where(gross > 0, df[c] / gross, 0.5)
+        if n == 1:
+            share = pd.Series(1.0, index=df.index)
+        else:
+            share = (df[c] / gross.replace(0, 1)).where(gross > 0, 1.0 / n)
         meter_net = df[c] - share * solar - share * battery_delta
         out[f"{c}_net"] = np.maximum(0.0, meter_net)
     return out
@@ -92,12 +100,11 @@ def annual_cost_from_dispatch(
     """
     meter_net = allocate_battery_to_meters(df, mdp_cols)
     # Combined grid import after battery (from dispatch) — use as "combined_kw" for delivery calc.
-    # Provide per-meter allocated flows to delivery bill.
-    full_df = pd.DataFrame({
-        "mdp1": meter_net[f"{mdp_cols[0]}_net"].values,
-        "mdp2": meter_net[f"{mdp_cols[1]}_net"].values,
-        "combined_kw": df["grid_import"].values,
-    }, index=df.index)
+    # Provide per-meter allocated flows to delivery bill. Works for 1 or 2 meters.
+    full_df_data = {f"mdp{i+1}": meter_net[f"{c}_net"].values for i, c in enumerate(mdp_cols)}
+    full_df_data["combined_kw"] = df["grid_import"].values
+    full_df = pd.DataFrame(full_df_data, index=df.index)
+    mapped_meter_cols = [f"mdp{i+1}" for i in range(len(mdp_cols))]
 
     # Monthly billing
     delivery_total = 0.0
@@ -107,14 +114,18 @@ def annual_cost_from_dispatch(
             continue
         month_idx = month_start.month
         bill = delivery_tariff.compute_bill(
-            sub, meter_cols=["mdp1", "mdp2"], combined_col="combined_kw",
+            sub, meter_cols=mapped_meter_cols, combined_col="combined_kw",
             period_start=sub.index.min(), period_end=sub.index.max(),
         )
         delivery_total += bill.total
+        # Locate the distribution-demand line regardless of tariff (ComEd vs PECO)
+        demand_line_names = ("Distribution Facility Charge", "Distribution Charges")
+        demand_line = next((l for l in bill.lines if l.name in demand_line_names), None)
+        billed_demand_kw = (demand_line.amount / delivery_tariff.dfc_rate(month_idx)) if demand_line else 0.0
         monthly_bills.append({
             "month": month_start.strftime("%Y-%m"),
             "total": bill.total,
-            "billed_demand_kw": bill.lines[2].amount / delivery_tariff.dfc_rate(month_idx),
+            "billed_demand_kw": billed_demand_kw,
             "kwh": float(sub["combined_kw"].sum()),
             "lines": [(l.name, l.amount) for l in bill.lines],
         })
@@ -164,9 +175,11 @@ def compare_scenarios(baseline: AnnualResult, with_battery: AnnualResult) -> dic
     # Extract DFC savings from monthly
     dfc_savings = 0.0
     other_delivery_savings = 0.0
+    # ComEd uses line name "Distribution Facility Charge"; PECO uses "Distribution Charges".
+    dfc_line_names = ("Distribution Facility Charge", "Distribution Charges")
     for b, w in zip(baseline.monthly_bills, with_battery.monthly_bills):
-        b_dfc = next(a for n, a in b["lines"] if n == "Distribution Facility Charge")
-        w_dfc = next(a for n, a in w["lines"] if n == "Distribution Facility Charge")
+        b_dfc = sum(a for n, a in b["lines"] if n in dfc_line_names)
+        w_dfc = sum(a for n, a in w["lines"] if n in dfc_line_names)
         dfc_savings += (b_dfc - w_dfc)
     other_delivery_savings = delivery_delta - dfc_savings
 

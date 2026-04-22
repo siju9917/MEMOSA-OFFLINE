@@ -1,0 +1,183 @@
+site:
+  name: Philadelphia-NoSolar
+  address: 3101 S 3rd St, Philadelphia, PA 19148
+  lat: 39.9135
+  lon: -75.1426
+  elevation_m: 10
+  tz: America/New_York
+  utility: PECO
+  iso: PJM
+  zone: PECO
+  solar_ac_nameplate_kw: 0
+
+data:
+  load_csv: PhiladelphiaLoadData.csv
+  solar_csv: null
+  load_time_col: Time
+  load_kw_cols: ["Main Service: Demand (kW) [kW]"]
+  solar_time_col: null
+  solar_production_cols: []
+  evaluation_year: 2025
+  solar_embedded_in_load: false
+  solar_enabled: false
+
+# No bill-confirmed PLC/NSPL anchor for PECO zone; all 5 hours proxied from load.
+plc_anchor_hours: []
+nspl_anchor_hour: null
+
+delivery_tariff:
+  kind: peco_ht_over_500kw
+  customer_charge_monthly: 383.13
+  distribution_rate_per_kw: 7.12
+  distribution_credit_per_kwh: -0.00060
+  # EENT rate varies by PJM delivery year. Jul 2025 bill used $2.51; Feb 2025 bill $2.28.
+  # Delivery years begin Jun 1. Use the observed rates; interpolate for months with no bills.
+  eent_per_kw_monthly:
+    1: 2.28
+    2: 2.28
+    3: 2.28
+    4: 2.28
+    5: 2.28
+    6: 2.51
+    7: 2.51
+    8: 2.51
+    9: 2.51
+    10: 2.51
+    11: 2.51
+    12: 2.51
+  # PECO bills EENT on PJM PLC kW, which is a tag value set annually by prior summer peaks.
+  # From bills: Jul used 217 PLC; Feb used 245 PLC. Use these two values for their
+  # respective PJM delivery years (Jun-May).
+  eent_plc_kw: 217
+  sales_tax_rate: 0.08
+  pf_adjustment_threshold: 0.90
+  # Observed site PF per bill: Feb 0.923 (no adj), Jul 0.875 (adj applied). Assume PF varies
+  # seasonally with cooling load. Between-bills: interpolate. (Battery scenarios can ignore
+  # PF since the battery delivers kW at unity PF into the bus, but gross load PF is
+  # preserved for attribution realism.)
+  power_factor_monthly:
+    1: 0.923
+    2: 0.923
+    3: 0.920
+    4: 0.910
+    5: 0.900
+    6: 0.880
+    7: 0.875
+    8: 0.875
+    9: 0.880
+    10: 0.900
+    11: 0.915
+    12: 0.923
+
+# Supply tariff: PECO-zone competitive supplier with indexed + hedged-block structure.
+# Structurally similar to Joliet's index-supply (hub LMP + retail adder + capacity +
+# transmission + RPS), so we use the IndexSupply class with PECO-specific parameters.
+supply_tariff:
+  primary: index
+  lmp_anchor_per_kwh: 0.0337   # Jul 2025 bill Energy line: 390,920 × $0.0337 = $13,173.25
+  index:
+    index_anchor_per_kwh: 0.0337
+    # Distribution losses not separately billed by this supplier; set small factor.
+    distribution_losses_factor: 0.02
+    fixed_retail_adder_per_kwh: 0.00652
+    # Capacity (PLC): 208.02 kW × $0.27043/kW-day (Jul 2025 PJM delivery year rate).
+    # In the bill, the January bill used "Unforced Capacity" at $0.05656/kW-day with
+    # 305.66 kW (prior delivery year). The Jul rate is the CURRENT PJM 2025/26 RPM rate.
+    capacity_obligation_kw: 208.02
+    capacity_rate_per_kw_day: 0.27043
+    # Transmission (NSPL): 231.06 kW × $0.07023/kW-day → equivalent $/kW-yr
+    nspl_kw: 231.06
+    transmission_rate_per_kw_yr: 25.63   # = 0.07023 × 365
+    # TEC: PECO-zone RPS charges on kWh, not a kW passthrough. Set to 0 (no TEC adder).
+    tec_effective_rate_per_kw_day: 0.0
+
+export:
+  allowed: false
+  rate_per_kwh_if_allowed: 0.0
+
+battery:
+  power_kw: 1250
+  energy_kwh: 2535
+  coupling: AC
+  chemistry: Li-ion
+  rte_ac_ac: 0.88
+  soc_min_frac: 0.05
+  soc_max_frac: 0.95
+  soc_init_frac: 0.50
+  aux_load_frac_per_day: 0.005
+  calendar_year_capacity_retention: 1.00
+
+battery_sizes_to_sweep:
+  - {power_kw: 250,  energy_kwh: 507,  label: "250kW/507kWh"}
+  - {power_kw: 500,  energy_kwh: 1014, label: "500kW/1014kWh"}
+  - {power_kw: 750,  energy_kwh: 1521, label: "750kW/1521kWh"}
+  - {power_kw: 1000, energy_kwh: 2028, label: "1000kW/2028kWh"}
+  - {power_kw: 1250, energy_kwh: 2535, label: "1250kW/2535kWh"}
+  - {power_kw: 1500, energy_kwh: 3042, label: "1500kW/3042kWh"}
+
+sizing_economics:
+  marginal_capex_per_kwh_added: 350
+  target_simple_payback_years: 10
+  marginal_capex_low:  250
+  marginal_capex_high: 500
+
+value_streams:
+  dfc_reduction: true
+  plc_reduction: true
+  nspl_reduction: true
+  energy_arbitrage: true
+  solar_self_consumption: false
+  dr_opportunity: true
+  power_factor: false
+  resilience: false
+  ancillary: false
+
+dr_programs_evaluated:
+  - name: PJM Emergency Load Response (Capacity)
+    capacity_payment_per_kw_yr: 70.0
+    energy_payment_per_kwh: 0.0
+    max_events_per_year: 10
+    max_hours_per_year: 60
+    event_duration_hr: 2
+    notification_hr: 0.5
+    committed_kw: 1250
+  - name: PJM Economic Load Response (Energy)
+    capacity_payment_per_kw_yr: 0.0
+    energy_payment_per_kwh: 0.08
+    max_events_per_year: 999
+    max_hours_per_year: 999
+    event_duration_hr: 2
+    notification_hr: 1.0
+    committed_kw: 1250
+
+# Solar is disabled for this scenario, but the synthesis block is still required
+# for the code path. Values below are placeholders.
+solar_synthesis:
+  dc_capacity_kw: 0
+  dc_to_ac_ratio: 1.25
+  ac_inverter_limit_kw: 0
+  tilt_deg: 20
+  azimuth_deg: 180
+  module_derate: 0.85
+  clear_sky_fraction_monthly:
+    1: 0.40
+    2: 0.44
+    3: 0.50
+    4: 0.54
+    5: 0.57
+    6: 0.60
+    7: 0.61
+    8: 0.59
+    9: 0.55
+    10: 0.48
+    11: 0.38
+    12: 0.36
+  hypothetical_from_nameplate: false
+  expected_annual_cf: 0.16
+
+mpc:
+  horizon_hours: 36
+  control_timestep_hours: 1
+  dfc_penalty_per_kw_above_target: 30.0
+  plc_penalty_per_kw_above_target: 10000.0
+  nspl_penalty_per_kw_above_target: 5000.0
