@@ -211,26 +211,40 @@
   "dr_programs": [
     {
       "name": "PJM Emergency Load Response (Capacity)",
+      "kind": "capacity_emergency",
       "capacity_revenue": 105000.0,
       "energy_revenue": 0.0,
-      "opportunity_cost": 9800.0,
-      "net_annual_value": 95200.0
+      "opportunity_cost_vs_baseline": 2400.0,
+      "net_annual_value": 102600.0,
+      "notes": "Event hours overlap ~80% with PLC hours (free) and ~60% with DFC target hours (minor conflict). Only one capacity DR registration per asset (this vs other capacity DR)."
     },
     {
       "name": "ComEd Voluntary Load Response",
+      "kind": "capacity_voluntary",
       "capacity_revenue": 67500.0,
       "energy_revenue": 2100.0,
-      "opportunity_cost": 11760.000000000002,
-      "net_annual_value": 57840.0
+      "opportunity_cost_vs_baseline": 2400.0,
+      "net_annual_value": 67200.0,
+      "notes": "Event hours overlap ~80% with PLC hours (free) and ~60% with DFC target hours (minor conflict). Only one capacity DR registration per asset (this vs other capacity DR)."
     },
     {
       "name": "PJM Economic Load Response (Energy)",
+      "kind": "economic_energy",
       "capacity_revenue": 0.0,
       "energy_revenue": 83916.0,
-      "opportunity_cost": 29399.999999999996,
-      "net_annual_value": 54516.0
+      "opportunity_cost_vs_baseline": 0.0,
+      "net_annual_value": 83916.0,
+      "notes": "Dispatches only when economically favorable; stacks with capacity DR and with the core battery value streams."
     }
   ],
+  "dr_recommended_stack": {
+    "recommended_stack": [
+      "PJM Emergency Load Response (Capacity)",
+      "PJM Economic Load Response (Energy)"
+    ],
+    "stacked_annual_value": 186516.0,
+    "rationale": "Pick the single highest-net capacity DR (mutually exclusive per asset) and add Economic DR on top (stacks freely)."
+  },
   "plc_hours": [
     "2025-08-15 18:00:00-05:00",
     "2025-06-27 14:00:00-05:00",
@@ -246,5 +260,94 @@
     "total_tag_annual": 200701.7396252,
     "capacity_per_kw_yr": 98.70695,
     "transmission_per_kw_yr": 46.025
+  },
+  "sensitivity": {
+    "tornado": [
+      {
+        "label": "MPC forecast skill (\u00b1typical)",
+        "lo": 190295.7663227101,
+        "hi": 229025.2524123015,
+        "delta_lo": -21457.731594816083,
+        "delta_hi": 17271.75449477532,
+        "span": 38729.4860895914
+      },
+      {
+        "label": "LMP diurnal intensity (\u00b125%)",
+        "lo": 206743.74242407153,
+        "hi": 219495.9584727832,
+        "delta_lo": -5009.755493454635,
+        "delta_hi": 7742.460555257043,
+        "span": 12752.216048711678
+      },
+      {
+        "label": "PLC identification (miss 1 of 5 proxy)",
+        "lo": 199933.49791752617,
+        "hi": 211753.49791752617,
+        "delta_lo": -11820.0,
+        "delta_hi": 0.0,
+        "span": 11820.0
+      },
+      {
+        "label": "Solar annual total (\u00b115%)",
+        "lo": 219284.48218226153,
+        "hi": 212144.21073942014,
+        "delta_lo": 7530.984264735365,
+        "delta_hi": 390.71282189397607,
+        "span": 7140.271442841389
+      },
+      {
+        "label": "LMP level (\u00b120%)",
+        "lo": 208734.55373126338,
+        "hi": 214772.44210378896,
+        "delta_lo": -3018.9441862627864,
+        "delta_hi": 3018.9441862627864,
+        "span": 6037.888372525573
+      },
+      {
+        "label": "15-min billing interval (hourly understates)",
+        "lo": 211753.49791752617,
+        "hi": 214313.0949439715,
+        "delta_lo": 0.0,
+        "delta_hi": 2559.597026445321,
+        "span": 2559.597026445321
+      },
+      {
+        "label": "Battery RTE (\u00b12 pp)",
+        "lo": 211578.20029261638,
+        "hi": 213875.70959610282,
+        "delta_lo": -175.29762490978464,
+        "delta_hi": 2122.2116785766557,
+        "span": 2297.5093034864403
+      }
+    ],
+    "monte_carlo": {
+      "samples": [
+        208794.4328479038,
+        184758.4510223798,
+        202838.9277321801,
+        189004.23006441665,
+        184507.87892684876,
+        171510.62243465066,
+        197577.68687276146,
+        197112.93859893107,
+        199370.84711172082,
+        203918.64464456658,
+        174088.42582765466,
+        198023.4625645224,
+        190703.56198213587,
+        182604.28575723385,
+        201190.04353742336,
+        195358.99370220792,
+        199499.11354004336,
+        184169.5664893894,
+        198236.3609365956,
+        219259.8887057735
+      ],
+      "p10": 181752.69976427592,
+      "p50": 197345.31273584627,
+      "p90": 204406.2234649003,
+      "mean": 194126.41816496695,
+      "std": 11274.866394763447
+    }
   }
 }

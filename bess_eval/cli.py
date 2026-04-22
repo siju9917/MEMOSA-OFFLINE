@@ -21,7 +21,8 @@ from .dispatch.perfect_foresight import perfect_foresight_dispatch
 from .dispatch.rulebased import rule_based_dispatch
 from .dispatch.mpc import rolling_mpc_dispatch
 from .attribution import annual_cost_from_dispatch, compare_scenarios
-from .dr_eval import evaluate_all
+from .dr_eval import evaluate_all, recommend_stack
+from .sensitivity import run_tornado, run_monte_carlo
 from .report import build_report
 
 
@@ -163,12 +164,45 @@ def run(cfg_path: str):
     print(f"  RB annual: ${rb_result.total:,.0f}  savings=${comparison_rb['battery_value_annual']:,.0f}")
 
     # --- 8. DR opportunity
-    print("\n[9/9] Evaluating DR program opportunity value ...")
-    dr_values = evaluate_all(cfg.dr_programs_evaluated, dfc_value_per_kw=140.0)
+    print("\n[9/11] Evaluating DR program opportunity value ...")
+    dr_values = evaluate_all(cfg.dr_programs_evaluated, dfc_value_per_kw=160.0, plc_value_per_kw=98.70)
     for d in dr_values:
-        print(f"  {d.name}: ${d.net_annual_value:,.0f} /yr")
+        print(f"  {d.name} ({d.kind}): gross ${d.gross:,.0f}  opp-cost ${d.opportunity_cost_vs_baseline:,.0f}  "
+              f"NET ${d.net_annual_value:,.0f}")
+    stack = recommend_stack(dr_values)
+    print(f"  Recommended stack: {stack['recommended_stack']}")
+    print(f"  Stacked annual value: ${stack['stacked_annual_value']:,.0f}")
 
-    # --- 9. Report
+    # --- 9. Tornado sensitivity
+    print("\n[10/11] Tornado sensitivity (8 inputs, ~16 LP solves) ...")
+    baseline_value_for_sens = comparison_mpc["battery_value_annual"]
+    tornado = run_tornado(
+        year_df, lmp, battery, delivery, supply,
+        dict(cfg.delivery_tariff.dfc_per_kw_monthly),
+        plc_hours, nspl_hour, dict(cfg.mpc),
+        baseline_value=baseline_value_for_sens,
+        export_allowed=cfg.export.allowed,
+        export_rate=cfg.export.rate_per_kwh_if_allowed,
+    )
+    print("  Ranked by swing (|hi-lo|):")
+    for r in tornado:
+        print(f"    {r['label']:<45} lo=${r['lo']:>10,.0f}  hi=${r['hi']:>10,.0f}  span=${r['span']:>10,.0f}")
+
+    # --- 10. Monte Carlo
+    print("\n[11/11] Monte Carlo confidence band (20 samples) ...")
+    mc = run_monte_carlo(
+        year_df, lmp, battery, delivery, supply,
+        dict(cfg.delivery_tariff.dfc_per_kw_monthly),
+        plc_hours, nspl_hour, dict(cfg.mpc),
+        baseline_value=baseline_value_for_sens,
+        n_samples=20,
+        export_allowed=cfg.export.allowed,
+        export_rate=cfg.export.rate_per_kwh_if_allowed,
+    )
+    print(f"  P10: ${mc['p10']:,.0f}   P50: ${mc['p50']:,.0f}   P90: ${mc['p90']:,.0f}")
+    print(f"  Mean: ${mc['mean']:,.0f}  StDev: ${mc['std']:,.0f}")
+
+    # --- 11. Report
     out_dir = Path("results") / cfg.site.name
     print(f"\nBuilding report in {out_dir}/ ...")
     html = build_report(
@@ -191,6 +225,9 @@ def run(cfg_path: str):
         plc_hours=plc_hours,
         nspl_hour=nspl_hour,
         tag_costs=tag_costs,
+        tornado=tornado,
+        mc=mc,
+        dr_stack=stack,
     )
     print(f"Report: {html}")
     print("\nDone.")

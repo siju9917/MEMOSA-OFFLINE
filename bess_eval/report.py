@@ -39,8 +39,12 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <p style="color:#6b7280">Generated {{generated_at}}</p>
 
 <div class="hero">
-  <div>Annual $ saved by battery (MPC-realistic dispatch)</div>
+  <div>Annual $ saved by battery — point estimate (MPC-realistic)</div>
   <div class="big">${{mpc_savings_fmt}}</div>
+  <div style="color:#374151; margin-top: 0.6em; font-size: 1.1em">
+    <strong>Confidence band (Monte Carlo, N=20 joint samples):</strong><br>
+    P10 <strong>${{mc_p10_fmt}}</strong> &nbsp;|&nbsp; P50 <strong>${{mc_p50_fmt}}</strong> &nbsp;|&nbsp; P90 <strong>${{mc_p90_fmt}}</strong> &nbsp; (μ ${{mc_mean_fmt}} ± σ ${{mc_std_fmt}})
+  </div>
   <div style="color:#6b7280; margin-top: 0.5em">Perfect-foresight upper bound: ${{pf_savings_fmt}} &nbsp;|&nbsp; Rule-based floor: ${{rb_savings_fmt}}</div>
 </div>
 
@@ -61,12 +65,17 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   <tr class="stream-row"><td><strong>Total</strong></td><td class="num"><strong>${{mpc_savings_fmt}}</strong></td><td class="num">100.0%</td></tr>
 </table>
 
-<h2>3. DR program opportunity value (if enrolled)</h2>
-<p>These revenues are <em>additive</em> to the core battery value above, assuming enrollment. Only one can typically be held at a time for the full 1,500 kW capacity.</p>
+<h2>3. DR program opportunity value (honest stacking analysis)</h2>
+<p>Each row is that program's <strong>standalone</strong> net value. They are <strong>not</strong> all additive to each other — PJM and ComEd capacity DR programs are mutually exclusive per asset (one registration only). Economic DR can stack freely with capacity DR. The opportunity cost column reflects the conflict between forced-DR dispatch and the core battery streams (DFC / PLC / NSPL) that we'd otherwise optimize; it is small because DR event hours mostly overlap with hours the battery would dispatch anyway.</p>
 <table>
-  <tr><th>Program</th><th class="num">Capacity revenue</th><th class="num">Energy revenue</th><th class="num">Opportunity cost</th><th class="num">Net annual value</th></tr>
+  <tr><th>Program</th><th>Type</th><th class="num">Capacity revenue</th><th class="num">Energy revenue</th><th class="num">Opp cost vs baseline</th><th class="num">Net standalone value</th></tr>
   {{dr_rows}}
 </table>
+<div class="note" style="margin-top: 1em">
+  <strong>Recommended stack:</strong> {{dr_stack_names}}<br>
+  <strong>Stacked annual value:</strong> ${{dr_stack_total}}<br>
+  Add this to the core battery value above for total annual benefit if enrolled.
+</div>
 
 <h2>4. Dispatch comparison (Perfect Foresight vs MPC vs Rule-Based)</h2>
 <table>
@@ -89,10 +98,21 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   {{tag_rows}}
 </table>
 
-<h2>8. Modeling assumptions & caveats</h2>
+<h2>8. Uncertainty — what could move the number and by how much</h2>
+
+<h3>8a. Tornado — single-factor sensitivity</h3>
+<p>Each bar shows how the annual battery value shifts if that assumption varies by ±1σ while everything else stays at baseline. Sorted by swing magnitude.</p>
+<img src="data:image/png;base64,{{plot_tornado_b64}}" alt="tornado">
+
+<h3>8b. Monte Carlo — joint uncertainty</h3>
+<p>Samples all uncertain assumptions simultaneously from their distributions (solar ±10%, LMP level ±12%, LMP shape intensity ±15%, PLC identification miss prob 20% per non-anchor hour, MPC forecast skill ±typical range), then re-runs full dispatch + attribution per sample.</p>
+<img src="data:image/png;base64,{{plot_mc_b64}}" alt="monte carlo">
+<p><strong>P10 ${{mc_p10_fmt}} &middot; P50 ${{mc_p50_fmt}} &middot; P90 ${{mc_p90_fmt}}</strong>. Half the plausible outcomes lie between P25 and P75; 80% lie between P10 and P90.</p>
+
+<h2>9. Modeling assumptions & caveats</h2>
 <ul>{{caveat_list}}</ul>
 
-<h2>9. Methodology — brief</h2>
+<h2>10. Methodology — brief</h2>
 <div class="note">
 {{methodology}}
 </div>
@@ -152,6 +172,42 @@ def plot_week(df: pd.DataFrame, title: str, battery_energy_kwh: float) -> str:
     return _plot_to_b64(fig)
 
 
+def plot_tornado(tornado: list, baseline_value: float) -> str:
+    labels = [r["label"] for r in tornado]
+    lo = [r["delta_lo"] for r in tornado]
+    hi = [r["delta_hi"] for r in tornado]
+    y = np.arange(len(labels))
+    fig, ax = plt.subplots(figsize=(10, 5))
+    for yi, l, h in zip(y, lo, hi):
+        ax.plot([l, h], [yi, yi], color="#64748b", lw=10, solid_capstyle="butt")
+        ax.plot([l], [yi], "o", color="#ef4444")
+        ax.plot([h], [yi], "o", color="#10b981")
+    ax.axvline(0, color="#222", lw=0.8)
+    ax.set_yticks(y)
+    ax.set_yticklabels(labels, fontsize=9)
+    ax.invert_yaxis()
+    ax.set_xlabel("Δ annual battery value ($/yr) vs baseline")
+    ax.set_title(f"Tornado: swing around baseline ${baseline_value:,.0f}/yr  (red=lo, green=hi)")
+    ax.grid(axis="x", alpha=0.3)
+    return _plot_to_b64(fig)
+
+
+def plot_mc(mc: dict, baseline_value: float) -> str:
+    samples = mc["samples"]
+    fig, ax = plt.subplots(figsize=(10, 3.5))
+    ax.hist(samples, bins=12, color="#3b82f6", edgecolor="white")
+    ax.axvline(mc["p10"], color="#ef4444", linestyle="--", label=f"P10 ${mc['p10']:,.0f}")
+    ax.axvline(mc["p50"], color="#10b981", linestyle="-", label=f"P50 ${mc['p50']:,.0f}")
+    ax.axvline(mc["p90"], color="#ef4444", linestyle="--", label=f"P90 ${mc['p90']:,.0f}")
+    ax.axvline(baseline_value, color="#000", linestyle=":", label=f"Base ${baseline_value:,.0f}")
+    ax.set_xlabel("Annual battery value ($/yr)")
+    ax.set_ylabel("Monte Carlo sample count")
+    ax.set_title(f"Monte Carlo joint uncertainty (N={len(samples)})")
+    ax.legend(fontsize=9)
+    ax.grid(alpha=0.3)
+    return _plot_to_b64(fig)
+
+
 def build_report(
     out_dir: Path,
     site_cfg: dict,
@@ -172,6 +228,9 @@ def build_report(
     plc_hours: list,
     nspl_hour: pd.Timestamp,
     tag_costs: dict,
+    tornado: list = None,
+    mc: dict = None,
+    dr_stack: dict = None,
 ) -> Path:
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -193,12 +252,18 @@ def build_report(
         stream_rows += f'<tr><td>{label}</td><td class="num">${_fmt_dollar(val)}</td><td class="num">{share:.1f}%</td></tr>\n'
 
     dr_rows = ""
+    kind_label = {
+        "capacity_emergency": "Capacity (Emergency)",
+        "capacity_voluntary": "Capacity (Voluntary)",
+        "economic_energy": "Economic (Energy-only)",
+    }
     for dr in dr_values:
         dr_rows += (
             f'<tr><td>{dr.name}</td>'
+            f'<td>{kind_label.get(dr.kind, dr.kind)}</td>'
             f'<td class="num">${_fmt_dollar(dr.capacity_revenue)}</td>'
             f'<td class="num">${_fmt_dollar(dr.energy_revenue)}</td>'
-            f'<td class="num">${_fmt_dollar(dr.opportunity_cost)}</td>'
+            f'<td class="num">${_fmt_dollar(dr.opportunity_cost_vs_baseline)}</td>'
             f'<td class="num">${_fmt_dollar(dr.net_annual_value)}</td></tr>\n'
         )
 
@@ -244,6 +309,10 @@ def build_report(
     plot_monthly = plot_monthly_bills(baseline_result.monthly_bills, mpc_result.monthly_bills)
     plot_winter = plot_week(winter_week, f"Winter week {winter_start.date()}", battery_cfg["energy_kwh"])
     plot_summer = plot_week(summer_week, f"Summer peak week {summer_anchor.date()}", battery_cfg["energy_kwh"])
+    baseline_value_mpc = comparison_mpc["battery_value_annual"]
+    plot_tornado_b64 = plot_tornado(tornado or [], baseline_value_mpc)
+    plot_mc_b64 = plot_mc(mc or {"samples": [], "p10": 0, "p50": 0, "p90": 0},
+                          baseline_value_mpc)
 
     caveats = [
         "Load data is hourly; ComEd bills demand on 30-minute intervals. This understates demand savings by ~2-3%.",
@@ -268,6 +337,9 @@ def build_report(
         "Capex, NPV, IRR are intentionally omitted per scope; raw annual savings enable external ROI analysis."
     )
 
+    mc = mc or {"samples": [], "p10": 0, "p50": 0, "p90": 0, "mean": 0, "std": 0}
+    dr_stack = dr_stack or {"recommended_stack": [], "stacked_annual_value": 0}
+
     html = HTML_TEMPLATE
     replacements = {
         "{{title}}": f"Battery Value Evaluation — {site_cfg['name']}",
@@ -286,6 +358,13 @@ def build_report(
         "{{mpc_savings_fmt}}": _fmt_dollar(comparison_mpc["battery_value_annual"]),
         "{{pf_savings_fmt}}":  _fmt_dollar(comparison_pf["battery_value_annual"]),
         "{{rb_savings_fmt}}":  _fmt_dollar(comparison_rb["battery_value_annual"]),
+        "{{mc_p10_fmt}}": _fmt_dollar(mc["p10"]),
+        "{{mc_p50_fmt}}": _fmt_dollar(mc["p50"]),
+        "{{mc_p90_fmt}}": _fmt_dollar(mc["p90"]),
+        "{{mc_mean_fmt}}": _fmt_dollar(mc["mean"]),
+        "{{mc_std_fmt}}": _fmt_dollar(mc["std"]),
+        "{{dr_stack_names}}": ", ".join(dr_stack["recommended_stack"]) or "none",
+        "{{dr_stack_total}}": _fmt_dollar(dr_stack["stacked_annual_value"]),
         "{{stream_rows}}":    stream_rows,
         "{{dr_rows}}":        dr_rows,
         "{{scenario_rows}}":  scenario_rows,
@@ -293,6 +372,8 @@ def build_report(
         "{{plot_monthly_b64}}": plot_monthly,
         "{{plot_winter_b64}}":  plot_winter,
         "{{plot_summer_b64}}":  plot_summer,
+        "{{plot_tornado_b64}}": plot_tornado_b64,
+        "{{plot_mc_b64}}":      plot_mc_b64,
         "{{caveat_list}}":    caveat_list,
         "{{methodology}}":    methodology,
     }
@@ -313,9 +394,14 @@ def build_report(
         "comparison_pf": comparison_pf,
         "comparison_rb": comparison_rb,
         "dr_programs": [d.__dict__ for d in dr_values],
+        "dr_recommended_stack": dr_stack,
         "plc_hours": [str(h) for h in plc_hours],
         "nspl_hour": str(nspl_hour),
         "tag_costs": tag_costs,
+        "sensitivity": {
+            "tornado": tornado,
+            "monte_carlo": mc,
+        },
     }
     json_path.write_text(json.dumps(payload, indent=2, default=str))
 
