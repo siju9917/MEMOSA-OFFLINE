@@ -1,0 +1,250 @@
+{
+  "site": {
+    "name": "Joliet",
+    "address": "1101 Cherry Hill Rd, Joliet, IL 60433",
+    "lat": 41.5152,
+    "lon": -88.085,
+    "elevation_m": 180,
+    "tz": "America/Chicago",
+    "utility": "ComEd",
+    "iso": "PJM",
+    "zone": "COMED"
+  },
+  "data_summary": {
+    "load_start": "2025-01-01 00:00:00-06:00",
+    "load_end": "2025-12-31 23:00:00-06:00",
+    "load_rows": 8760,
+    "load_missing_hours": 0,
+    "annual_kwh": 15087169.304707816,
+    "peak_kw": 2752.7279,
+    "load_factor": 0.6256628564683211,
+    "mdp1_peak_kw": 1488.88805,
+    "mdp2_peak_kw": 1350.1749666666667,
+    "solar_start": "2026-01-01 00:00:00-06:00",
+    "solar_end": "2026-04-22 23:00:00-05:00",
+    "solar_rows": 2687,
+    "solar_measured_kwh": 1242005.525,
+    "solar_peak_ac_kw": 3879.2,
+    "evaluation_year": 2025
+  },
+  "battery": {
+    "power_kw": 1500,
+    "energy_kwh": 3042,
+    "coupling": "AC",
+    "chemistry": "Li-ion",
+    "rte_ac_ac": 0.88,
+    "soc_min_frac": 0.05,
+    "soc_max_frac": 0.95,
+    "soc_init_frac": 0.5,
+    "aux_load_frac_per_day": 0.005,
+    "calendar_year_capacity_retention": 1.0
+  },
+  "solar_annual_kwh": 4901284.222631108,
+  "comparison_mpc": {
+    "baseline_total_annual": 1120573.0236888279,
+    "with_battery_total_annual": 908819.5257713017,
+    "battery_value_annual": 211753.49791752617,
+    "streams": {
+      "dfc_demand_reduction": 54876.744374178554,
+      "other_delivery_riders_taxes": -871.0872164159373,
+      "energy_arbitrage": 14509.07585865719,
+      "plc_capacity_tag_reduction": 73874.56490110632,
+      "nspl_transmission_tag_reduction": 69364.2
+    },
+    "baseline_detail": {
+      "scenario": "Baseline (no battery)",
+      "total": 1120573.0236888279,
+      "delivery": 556016.3226713907,
+      "supply": 564556.7010174372,
+      "capacity_tag": 79686.5013265452,
+      "transmission_tag": 82978.24712303869,
+      "energy_cost": 401891.95256785327,
+      "other_supply": 0.0,
+      "per_stream": {
+        "delivery_total": 556016.3226713907,
+        "supply_energy": 272314.7165399899,
+        "supply_losses": 14510.096368921122,
+        "supply_fixed_adder": 115067.13965894225,
+        "capacity_tag": 79686.5013265452,
+        "transmission_tag": 82587.42601740932,
+        "tec_pass_through": 390.8211056293699,
+        "plc_kw_post": 807.3038557725185,
+        "nspl_kw_post": 1794.4036071137277,
+        "total_kwh": 10527643.15269371
+      }
+    },
+    "with_battery_detail": {
+      "scenario": "MPC-realistic",
+      "total": 908819.5257713017,
+      "delivery": 502010.6655136281,
+      "supply": 406808.8602576736,
+      "capacity_tag": 5811.936425438874,
+      "transmission_tag": 13614.047123038688,
+      "energy_cost": 387382.8767091961,
+      "other_supply": 0.0,
+      "per_stream": {
+        "delivery_total": 502010.6655136281,
+        "supply_energy": 257146.14510307126,
+        "supply_losses": 14583.946874525309,
+        "supply_fixed_adder": 115652.78473159949,
+        "capacity_tag": 5811.936425438874,
+        "transmission_tag": 13549.926017409318,
+        "tec_pass_through": 64.1211056293699,
+        "plc_kw_post": 58.880721422745545,
+        "nspl_kw_post": 294.40360711372773,
+        "total_kwh": 10581224.586605625
+      }
+    }
+  },
+  "comparison_pf": {
+    "baseline_total_annual": 1120573.0236888279,
+    "with_battery_total_annual": 866183.5374033634,
+    "battery_value_annual": 254389.4862854645,
+    "streams": {
+      "dfc_demand_reduction": 85432.29045516838,
+      "other_delivery_riders_taxes": 2211.804480592924,
+      "energy_arbitrage": 23506.626448596828,
+      "plc_capacity_tag_reduction": 73874.56490110632,
+      "nspl_transmission_tag_reduction": 69364.2
+    },
+    "baseline_detail": {
+      "scenario": "Baseline (no battery)",
+      "total": 1120573.0236888279,
+      "delivery": 556016.3226713907,
+      "supply": 564556.7010174372,
+      "capacity_tag": 79686.5013265452,
+      "transmission_tag": 82978.24712303869,
+      "energy_cost": 401891.95256785327,
+      "other_supply": 0.0,
+      "per_stream": {
+        "delivery_total": 556016.3226713907,
+        "supply_energy": 272314.7165399899,
+        "supply_losses": 14510.096368921122,
+        "supply_fixed_adder": 115067.13965894225,
+        "capacity_tag": 79686.5013265452,
+        "transmission_tag": 82587.42601740932,
+        "tec_pass_through": 390.8211056293699,
+        "plc_kw_post": 807.3038557725185,
+        "nspl_kw_post": 1794.4036071137277,
+        "total_kwh": 10527643.15269371
+      }
+    },
+    "with_battery_detail": {
+      "scenario": "Perfect foresight",
+      "total": 866183.5374033634,
+      "delivery": 468372.2277356294,
+      "supply": 397811.30966773396,
+      "capacity_tag": 5811.936425438874,
+      "transmission_tag": 13614.047123038688,
+      "energy_cost": 378385.32611925644,
+      "other_supply": 0.0,
+      "per_stream": {
+        "delivery_total": 468372.2277356294,
+        "supply_energy": 250364.74618167558,
+        "supply_losses": 14335.781569688872,
+        "supply_fixed_adder": 113684.79836789201,
+        "capacity_tag": 5811.936425438874,
+        "transmission_tag": 13549.926017409318,
+        "tec_pass_through": 64.1211056293699,
+        "plc_kw_post": 58.880721422745545,
+        "nspl_kw_post": 294.40360711372773,
+        "total_kwh": 10401170.939422874
+      }
+    }
+  },
+  "comparison_rb": {
+    "baseline_total_annual": 1120573.0236888279,
+    "with_battery_total_annual": 1098809.7842674828,
+    "battery_value_annual": 21763.23942134506,
+    "streams": {
+      "dfc_demand_reduction": 15863.041831671988,
+      "other_delivery_riders_taxes": 1635.6525981864834,
+      "energy_arbitrage": 4264.544991486589,
+      "plc_capacity_tag_reduction": 0.0,
+      "nspl_transmission_tag_reduction": 0.0
+    },
+    "baseline_detail": {
+      "scenario": "Baseline (no battery)",
+      "total": 1120573.0236888279,
+      "delivery": 556016.3226713907,
+      "supply": 564556.7010174372,
+      "capacity_tag": 79686.5013265452,
+      "transmission_tag": 82978.24712303869,
+      "energy_cost": 401891.95256785327,
+      "other_supply": 0.0,
+      "per_stream": {
+        "delivery_total": 556016.3226713907,
+        "supply_energy": 272314.7165399899,
+        "supply_losses": 14510.096368921122,
+        "supply_fixed_adder": 115067.13965894225,
+        "capacity_tag": 79686.5013265452,
+        "transmission_tag": 82587.42601740932,
+        "tec_pass_through": 390.8211056293699,
+        "plc_kw_post": 807.3038557725185,
+        "nspl_kw_post": 1794.4036071137277,
+        "total_kwh": 10527643.15269371
+      }
+    },
+    "with_battery_detail": {
+      "scenario": "Rule-based",
+      "total": 1098809.7842674828,
+      "delivery": 538517.6282415322,
+      "supply": 560292.1560259506,
+      "capacity_tag": 79686.5013265452,
+      "transmission_tag": 82978.24712303869,
+      "energy_cost": 397627.4075763667,
+      "other_supply": 0.0,
+      "per_stream": {
+        "delivery_total": 538517.6282415322,
+        "supply_energy": 269204.83865192276,
+        "supply_losses": 14380.796412707849,
+        "supply_fixed_adder": 114041.77251173605,
+        "capacity_tag": 79686.5013265452,
+        "transmission_tag": 82587.42601740932,
+        "tec_pass_through": 390.8211056293699,
+        "plc_kw_post": 807.3038557725185,
+        "nspl_kw_post": 1794.4036071137277,
+        "total_kwh": 10433830.970881615
+      }
+    }
+  },
+  "dr_programs": [
+    {
+      "name": "PJM Emergency Load Response (Capacity)",
+      "capacity_revenue": 105000.0,
+      "energy_revenue": 0.0,
+      "opportunity_cost": 9800.0,
+      "net_annual_value": 95200.0
+    },
+    {
+      "name": "ComEd Voluntary Load Response",
+      "capacity_revenue": 67500.0,
+      "energy_revenue": 2100.0,
+      "opportunity_cost": 11760.000000000002,
+      "net_annual_value": 57840.0
+    },
+    {
+      "name": "PJM Economic Load Response (Energy)",
+      "capacity_revenue": 0.0,
+      "energy_revenue": 83916.0,
+      "opportunity_cost": 29399.999999999996,
+      "net_annual_value": 54516.0
+    }
+  ],
+  "plc_hours": [
+    "2025-08-15 18:00:00-05:00",
+    "2025-06-27 14:00:00-05:00",
+    "2025-06-27 17:00:00-05:00",
+    "2025-06-24 14:00:00-05:00",
+    "2025-07-23 14:00:00-05:00"
+  ],
+  "nspl_hour": "2025-08-15 18:00:00-05:00",
+  "tag_costs": {
+    "capacity_annual": 140595.81061319998,
+    "transmission_annual": 59822.834749999995,
+    "tec_annual": 283.09426199999996,
+    "total_tag_annual": 200701.7396252,
+    "capacity_per_kw_yr": 98.70695,
+    "transmission_per_kw_yr": 46.025
+  }
+}

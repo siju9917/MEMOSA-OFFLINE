@@ -1,0 +1,228 @@
+site:
+  name: Joliet
+  address: 1101 Cherry Hill Rd, Joliet, IL 60433
+  lat: 41.5152
+  lon: -88.0850
+  elevation_m: 180
+  tz: America/Chicago
+  utility: ComEd
+  iso: PJM
+  zone: COMED
+
+data:
+  load_csv: JolietLoadData.csv
+  solar_csv: JolietSolar.csv
+  load_time_col: Time
+  load_kw_cols: ["Main Service MDP 1: Demand (kW) [kW]", "Main Service MDP 2: Demand (kW) [kW]"]
+  solar_time_col: "Site Time"
+  solar_production_cols: ["METER - PRODUCTION (A-North) Kilowatt hours", "METER - PRODUCTION (B-South) Kilowatt hours"]
+  evaluation_year: 2025
+
+delivery_tariff:
+  kind: comed_vll_secondary
+  # rates from ratebook + verified against bills
+  customer_charge_monthly: 1005.03
+  metering_charge_monthly: 14.10
+  meter_lease_monthly: 5.16
+  # DFC $/kW varies by billing period via DSPR reconciliation
+  # Feb bill shows $13.49, Jul-Aug bill shows $13.43. Use monthly schedule.
+  dfc_per_kw_monthly:
+    1: 13.49
+    2: 13.49
+    3: 13.49
+    4: 13.49
+    5: 13.49
+    6: 13.49
+    7: 13.43
+    8: 13.43
+    9: 13.43
+    10: 13.43
+    11: 13.43
+    12: 13.43
+  iedt_per_kwh: 0.00124
+  # on-peak window per ratebook line 9026: Mon-Fri 9AM-10PM CPT, ex holidays
+  on_peak:
+    weekday_start_hour: 9
+    weekday_end_hour: 22  # exclusive
+    weekdays_only: true
+    exclude_holidays: [new_years, memorial, independence, labor, thanksgiving, christmas]
+  demand_interval_min: 30
+  riders_per_kwh:
+    renewable_portfolio_standard: 0.00502
+    # ECRA rate varies by month; Feb 2025 = 0.00002, Aug 2025 = 0.00010
+    environmental_cost_recovery_monthly:
+      1: 0.00002
+      2: 0.00002
+      3: 0.00002
+      4: 0.00005
+      5: 0.00007
+      6: 0.00010
+      7: 0.00010
+      8: 0.00010
+      9: 0.00010
+      10: 0.00008
+      11: 0.00005
+      12: 0.00002
+    coal_to_solar_storage_fund: 0.00005
+    zero_emission_standard: 0.00195
+    # Carbon-Free Energy Resource Adjustment swings positive/negative by month
+    # Use monthly avg; for 2025 bills: Feb=+0.00803, Aug=-0.00781
+    # Approximate monthly schedule based on seasonal pattern (winter positive, summer negative)
+    carbon_free_energy_adj_monthly:
+      1: 0.00803
+      2: 0.00803
+      3: 0.00500
+      4: 0.00200
+      5: -0.00300
+      6: -0.00781
+      7: -0.00781
+      8: -0.00781
+      9: -0.00500
+      10: -0.00100
+      11: 0.00400
+      12: 0.00803
+    energy_efficiency_programs: 0.00444
+    energy_transition_assistance: 0.00072
+  # Franchise: rate varies slightly by month (DSPR reconciliation). Basis = Distribution
+  # Facility Charge + IEDT minus DSPR-adjustment (derived from bills: Feb basis/DFC+IEDT ratio ~0.914;
+  # Aug ratio ~0.903). Use monthly effective rates against delivery_subtotal (DFC+IEDT only).
+  # Feb: 311.33 / 26,523.83 = 0.01174; Aug: 441.54 / 37,018.89 = 0.01193
+  franchise_effective_rate_monthly:
+    1: 0.01174
+    2: 0.01174
+    3: 0.01180
+    4: 0.01185
+    5: 0.01185
+    6: 0.01190
+    7: 0.01193
+    8: 0.01193
+    9: 0.01190
+    10: 0.01185
+    11: 0.01180
+    12: 0.01174
+  # Franchise basis = DFC + IEDT (excludes customer charge, metering, meter lease)
+  franchise_basis: dfc_iedt
+  # IL Electricity Excise Tax tiered schedule (effective per-kWh on large industrial)
+  # From bills: Feb effective 0.00291/kWh, Aug effective 0.00287/kWh
+  il_excise_effective_per_kwh: 0.00289
+  il_excise_marginal_per_kwh: 0.00244
+  # Joliet municipal electricity tax — applied as $/kWh (tiered, but ~flat at this size)
+  # Feb: 2050.49 / 1,084,687 = $0.00189/kWh ; Aug: 2513.86 / 1,387,541 = $0.00181/kWh
+  municipal_tax_per_kwh: 0.00185
+
+supply_tariff:
+  primary: index
+  # Aug-Sep 2025 bill shows index structure
+  index:
+    # Period-average LMP seen on bill = $0.03270027/kWh for 7/14-8/13 billing period
+    # Will be used to scale a synthetic PJM-ComEd LMP shape (see pjm_data.py)
+    index_anchor_per_kwh: 0.0327
+    distribution_losses_factor: 0.0506   # 68,171 / 1,347,251 from Aug bill
+    fixed_retail_adder_per_kwh: 0.01093
+    # Capacity: 1,424.376 kW cap-obl × $0.27043/kW-day × days_in_month
+    # From Aug bill; PLC tag is ~1,424 kW
+    capacity_obligation_kw: 1424.376
+    capacity_rate_per_kw_day: 0.27043
+    # Transmission: $46.025/kW-yr × NSPL kW × days_in_month / 365
+    nspl_kw: 1299.79
+    transmission_rate_per_kw_yr: 46.025
+    tec_pass_through_rates: [0.00893, 0.00922]   # applied to NSPL kW
+  # Secondary: Energy Harbor block contract (Feb bill) - bookend
+  block:
+    block1_kwh_per_month: 720000
+    block1_rate_per_kwh: 0.04996
+    block2_kwh_per_month: 720000
+    block2_rate_per_kwh: 0.0442
+    overage_rate_per_kwh: 0.040038   # sold back at day-ahead LMP
+    lmp_adder_per_kwh: 0.0075
+    capacity_mw: 1.5315751
+    capacity_rate_per_mw_day: 29.5
+    transmission_mw: 1.29979
+    transmission_rate_per_mw_day: 105.56
+
+battery:
+  power_kw: 1500
+  energy_kwh: 3042
+  coupling: AC
+  chemistry: Li-ion
+  rte_ac_ac: 0.88
+  soc_min_frac: 0.05
+  soc_max_frac: 0.95
+  soc_init_frac: 0.50
+  aux_load_frac_per_day: 0.005  # 0.5% of rated energy per day standby
+  # cycle-based degradation; not stepped year-by-year since scope = 1 year
+  calendar_year_capacity_retention: 1.00
+
+value_streams:
+  dfc_reduction: true
+  plc_reduction: true        # PJM 5CP capacity tag
+  nspl_reduction: true       # PJM 1CP transmission tag
+  energy_arbitrage: true
+  solar_self_consumption: true
+  dr_opportunity: true       # evaluate DR if enrolled
+  power_factor: false
+  resilience: false
+  ancillary: false
+
+dr_programs_evaluated:
+  - name: PJM Emergency Load Response (Capacity)
+    capacity_payment_per_kw_yr: 70.0   # typical Base Residual Auction clear × performance
+    energy_payment_per_kwh: 0.0
+    max_events_per_year: 10
+    max_hours_per_year: 60
+    event_duration_hr: 2
+    notification_hr: 0.5
+    committed_kw: 1500
+  - name: ComEd Voluntary Load Response
+    capacity_payment_per_kw_yr: 45.0
+    energy_payment_per_kwh: 0.05
+    max_events_per_year: 20
+    max_hours_per_year: 100
+    event_duration_hr: 2
+    notification_hr: 2.0
+    committed_kw: 1500
+  - name: PJM Economic Load Response (Energy)
+    capacity_payment_per_kw_yr: 0.0
+    energy_payment_per_kwh: 0.08   # avg LMP at dispatch × site-specific adder
+    max_events_per_year: 999
+    max_hours_per_year: 999
+    event_duration_hr: 2
+    notification_hr: 1.0
+    committed_kw: 1500
+
+# Export/net-metering. ComEd DG net metering is limited to systems <=2 MW nonres;
+# site is ~4 MW PV so not eligible. Assume no compensation for net export (battery
+# should not discharge to grid), or wholesale LMP at best.
+export:
+  allowed: false
+  rate_per_kwh_if_allowed: 0.0
+
+solar_synthesis:
+  # Physical system params fitted from 2026 Jan-Apr data
+  dc_capacity_kw: 5000     # starting guess, re-fit
+  dc_to_ac_ratio: 1.25
+  ac_inverter_limit_kw: 4000
+  tilt_deg: 20
+  azimuth_deg: 180
+  module_derate: 0.85
+  # Midwest monthly clear-sky fraction (published climatology, IL)
+  clear_sky_fraction_monthly:
+    1: 0.42
+    2: 0.45
+    3: 0.50
+    4: 0.53
+    5: 0.57
+    6: 0.60
+    7: 0.62
+    8: 0.60
+    9: 0.58
+    10: 0.50
+    11: 0.38
+    12: 0.38
+
+mpc:
+  horizon_hours: 36
+  control_timestep_hours: 1
+  dfc_penalty_per_kw_above_target: 30.0
+  plc_penalty_per_kw_above_target: 10000.0   # very high; only 5 hrs/yr matter
+  nspl_penalty_per_kw_above_target: 5000.0
